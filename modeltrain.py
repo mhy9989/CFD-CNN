@@ -110,11 +110,14 @@ class modeltrain():
             # ---------- Check Loss ----------
             if valid_loss < best_loss:
                 best_loss = valid_loss
-                checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model{n_epochs}')
-                model.save_checkpoint(save_dir=checkpoint_path,
-                                      client_state={'checkpoint_step': epoch})
-                print_rank_0('[{:03d}/{:03d}] saving model with loss {:.5e}'.format(epoch + 1, n_epochs, best_loss))
+                if rank == 0:
+                    checkpoint_path = os.path.join(model_path, 'checkpoint',
+                                    f'model_{n_epochs}.pt')
+                    save_dict = model.state_dict()
+                    torch.save(save_dict, checkpoint_path)
+                    print_rank_0('[{:03d}/{:03d}] saving model with loss {:.5e}'.format(epoch + 1, n_epochs, best_loss))
+                if dist.is_initialized():
+                    dist.barrier()
         
         json_file_path = os.path.join(model_path, 'checkpoint',
                                 f'data_record.json')
@@ -164,11 +167,9 @@ class modeltrain():
     def test_model(self, model, model_path,test_dataset,data_scaler_list):
         n_epochs = self.args.max_epoch
         checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model{n_epochs}')
-        _, client_state = model.load_checkpoint(load_dir=checkpoint_path)
-        checkpoint_step = client_state['checkpoint_step']
+                                f'model_{n_epochs}.pt')
+        model.load_state_dict(torch.load(checkpoint_path))
         print_rank_0(f"Successful load checkpoint!")
-        print_rank_0(f"Best checkpoint step: {checkpoint_step}")
         data_type_num = self.args.data_type_num
         model.eval()
         device = model.device
