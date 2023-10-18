@@ -1,0 +1,38 @@
+{
+    "seed": 2023,
+    "data_path": "../flow2d-t",
+    "data_num": 201,
+    "data_type_num": 1,
+    "data_width": 1181,
+    "data_height": 220,
+    "data_range": [[0,150],[200,800]],
+    "data_mean": [
+        3.046747753584717
+    ],
+    "data_std": [
+        2.233367751818325
+    ],
+    "data_max": [
+        11.87583939
+    ],
+    "data_min": [
+        0.80469401
+    ],
+    "data_delt": 1,
+    "per_device_train_batch_size": 1,
+    "per_device_valid_batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "valid_ratio": 0.1,
+    "num_workers": 1,
+    "net_type": "CFD_ConLSTM",
+    "actfun": "relu",
+    "max_epoch": 500,
+    "learnrate": 0.01,
+    "lossfun": "MSE",
+    "optim": "Adam",
+    "distributed": true,
+    "modelname": "CFD_ConvLSTM_1to1",
+    "model_path": "./Model/CFD_ConvLSTM_1to1",
+    "description": "CFD ConvLSTM 1 to 1",
+    "current_time": "2023-10-12 17:09:44"
+}
