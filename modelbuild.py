@@ -96,7 +96,9 @@ class modelbuild():
         args.steps_per_epoch = math.ceil(trainlen/args.world_size)
 
 
-        ds_config = get_train_ds_config(offload=ds_args.offload, stage=ds_args.zero_stage)
+        ds_config = get_train_ds_config(offload=ds_args.offload, 
+                                        stage=ds_args.zero_stage,
+                                        steps_per_print=args.steps_per_epoch)
         
         ds_config['train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
         

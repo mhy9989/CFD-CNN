@@ -74,7 +74,7 @@ class modeltrain():
 
         # Scheduler can be customized
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
-        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=args.steps_per_epoch, epochs=n_epochs)
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.learnrate, steps_per_epoch=args.steps_per_epoch, epochs=n_epochs)
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         # Deepspeed initialize
         model, optimizer, _, lr_scheduler = deepspeed.initialize(

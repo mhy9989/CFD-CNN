@@ -4,7 +4,8 @@ MICRO_BATCH_SIZE = 4
 
 
 def get_train_ds_config(offload,
-                        stage=0):
+                        stage,
+                        steps_per_print=1):
 
     device = "cpu" if offload else "none"
     zero_opt_dict = {
@@ -23,8 +24,8 @@ def get_train_ds_config(offload,
     return {
         "train_batch_size": GLOBAL_BATCH_SIZE,
         "train_micro_batch_size_per_gpu": MICRO_BATCH_SIZE,
-        "steps_per_print": 1,
-        #"zero_optimization": zero_opt_dict,
+        "steps_per_print": steps_per_print,
+        "zero_optimization": zero_opt_dict,
         # "fp16": {
         #     "enabled": True,
         #     "loss_scale_window": 100
