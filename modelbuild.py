@@ -70,7 +70,7 @@ class modelbuild():
         }
         self.optimizer= getattr(optim, args.optim)(
         self.net.parameters(), **optim_hparas)
-        print_rank_0(f"The optimizer  is created. Optimizer type: {args.optim}")
+        print_rank_0(f"The optimizer is created. Optimizer type: {args.optim}")
         # Setup Lossfun
         loss_funs = {
             'MAE':nn.L1Loss(),
@@ -80,7 +80,7 @@ class modelbuild():
             'Log': nn.LogSoftmax()
         }
         self.criterion=loss_funs[args.lossfun]
-        print_rank_0(f"The criterion  is created. criterion type: {args.lossfun}")
+        print_rank_0(f"The criterion is created. criterion type: {args.lossfun}")
 
     def loadsetting(self, model_path,ds_args):
         """Load setting and build model"""
@@ -100,7 +100,7 @@ class modelbuild():
         if args.print_ds_output:
             steps_per_print = args.steps_per_epoch
         else:
-            steps_per_print = args.max_epoch * args.steps_per_epoch
+            steps_per_print = args.max_epoch * args.steps_per_epoch +1
 
         ds_config = get_train_ds_config(offload=ds_args.offload, 
                                         stage=ds_args.zero_stage,

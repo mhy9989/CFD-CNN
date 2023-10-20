@@ -47,7 +47,6 @@ class modeltrain():
         train_dataloader, valid_dataloader, test_dataset, train_sampler, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
             = get_datloader(self.args)
         #Training
-        print_rank_0(f"lr = {self.args.learnrate}")
         data_record,model = self.train_model(train_dataloader,train_sampler, valid_dataloader,model_path)
         
         if self.args.global_rank == 0:
