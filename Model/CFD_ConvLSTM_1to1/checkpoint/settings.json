@@ -27,7 +27,7 @@
     "net_type": "CFD_ConLSTM",
     "actfun": "Relu",
     "max_epoch": 500,
-    "learnrate": 0.01,
+    "learnrate": 0.001,
     "lossfun": "MSE",
     "optim": "Adam",
     "distributed": true,

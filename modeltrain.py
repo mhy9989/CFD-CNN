@@ -213,11 +213,11 @@ class modeltrain():
         os.makedirs(pic_folder, exist_ok=True)
         for i in range(data_type_num):
             min_max = [labels[i].min(), labels[i].max()]
-            self.plot_test_figure(self, min_max, labels[i], i, "label", mode, pic_folder, dpi=dpi)
-            self.plot_test_figure(self, min_max, pred[i], i, "pred", mode, pic_folder, dpi=dpi)
+            self.plot_test_figure(min_max, labels[i], i, "label", mode, pic_folder, dpi)
+            self.plot_test_figure(self, min_max, pred[i], i, "pred", mode, pic_folder, dpi)
 
             min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
-            self.plot_test_figure(self, min_max, labels[i]-pred[i], i, "delt", mode, pic_folder, dpi=dpi)
+            self.plot_test_figure(min_max, labels[i]-pred[i], i, "delt", mode, pic_folder, dpi)
             plt.close()
 
     def plot_test_figure(self, min_max, data, data_type, data_name, mode, pic_folder, dpi=300):
@@ -244,8 +244,8 @@ class modeltrain():
         x_1 = range(total_steps)
         x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
         figure(figsize=(6, 4))
-        plt.semilogx(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
-        plt.semilogx(x_1, loss_record['train_loss'], c='tab:red', label='train')
+        plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
+        plt.semilogy(x_1, loss_record['train_loss'], c='tab:red', label='train')
         plt.xlabel('Training steps')
         plt.ylabel('MSE loss')
         plt.title('Learning curve of {}'.format(title))
