@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-
 import os
 import numpy as np
 import matplotlib
@@ -48,7 +46,6 @@ class modeltrain():
             The path of the model.
 
         """
-
         #Make Dataset
         train_dataloader, valid_dataloader, test_dataset, train_sampler, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
             = get_datloader(self.args)
@@ -59,6 +56,8 @@ class modeltrain():
         if self.args.global_rank == 0:
             self.plot_learning_curve(data_record, model_path, 300,title='CFD-ConvLSTM model')
             self.test_model(model, model_path,test_dataset,data_scaler_list)
+        if dist.is_initialized():
+                dist.barrier()
 
 
     def train_model(self, train_dataloader,train_sampler, valid_dataloader, model_path):
@@ -91,6 +90,7 @@ class modeltrain():
         rank = args.global_rank
         
         for epoch in range(0,n_epochs):
+            train_sampler.set_epoch(epoch)
             tic = time.time()
             # ---------- Training ----------
             train_loss = self.train_epoch(model,train_dataloader,criterion,optimizer,lr_scheduler)
@@ -105,7 +105,7 @@ class modeltrain():
            
             # ---------- Comput time ----------
             data_time = time.time() - tic
-            print_rank_0(f"data_time = {data_time:.4f}\n")
+            print_rank_0(f"data_time = {data_time:.4f}s\n")
             
             # ---------- Check Loss ----------
             if valid_loss < best_loss:
@@ -181,89 +181,65 @@ class modeltrain():
 
         labels = labels.squeeze(0).cpu().numpy()
         pred = pred.squeeze(0).cpu().numpy()
+        mode = "Computed"
+        self.comput_test(labels, pred, mode,model_path)
+
+        for i in range(data_type_num):
+            labels[i] = data_scaler_list[i].inverse_transform(labels[i])
+            pred[i] = data_scaler_list[i].inverse_transform(pred[i])
+        mode = "Original"
+        self.comput_test(labels, pred, mode,model_path)
+
+    def comput_test(self, labels, pred,mode,model_path):
+        data_type_num = self.args.data_type_num
         mse = [0 for _ in range(data_type_num)]
         rmse = [0 for _ in range(data_type_num)]
         mae = [0 for _ in range(data_type_num)]
         mre = [0 for _ in range(data_type_num)]
+
         for i in range(data_type_num):
             mse[i] = mean_squared_error(labels[i], pred[i])
             rmse[i] = np.sqrt(mse[i])
             mae[i] = mean_absolute_error(labels[i], pred[i])
             mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-7))
-        mode = "Computed"
-        print_rank_0(f"{mode} MSE: {mse[0]}")
-        print_rank_0(f"{mode} RMSE: {rmse[0]}")
-        print_rank_0(f"{mode} MAE: {mae[0]}")
-        print_rank_0(f"{mode} mre: {mre[0]}")
 
-        if self.args.global_rank == 0:
-            self.plot_test(labels,pred,300,model_path,mode)
-        
-        
-        for i in range(data_type_num):
-            labels[i] = data_scaler_list[i].inverse_transform(labels[i])
-            pred[i] = data_scaler_list[i].inverse_transform(pred[i])
-            mse[i] = mean_squared_error(labels[i], pred[i])
-            rmse[i] = np.sqrt(mse[i])
-            mae[i] = mean_absolute_error(labels[i], pred[i])
-            mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-7))
+            print_rank_0(f"{mode} {i} MSE: {mse[i]}")
+            print_rank_0(f"{mode} {i} RMSE: {rmse[i]}")
+            print_rank_0(f"{mode} {i} MAE: {mae[i]}")
+            print_rank_0(f"{mode} {i} mre: {mre[i]}")
 
-        mode = "Original"
-        print_rank_0(f"{mode} MSE: {mse[0]}")
-        print_rank_0(f"{mode} RMSE: {rmse[0]}")
-        print_rank_0(f"{mode} MAE: {mae[0]}")
-        print_rank_0(f"{mode} mre: {mre[0]}")
-
-        if self.args.global_rank == 0:
-            self.plot_test(labels,pred,300,model_path,mode)
+        self.plot_test(labels,pred,300,model_path,mode)
 
     def plot_test(self, labels,pred,dpi,model_path,mode):
         data_type_num = self.args.data_type_num
-        cmap = 'RdBu_r'
         pic_folder = os.path.join(model_path, 'pic',mode)
         os.makedirs(pic_folder, exist_ok=True)
         for i in range(data_type_num):
-            levels = np.linspace(labels[i].min(), labels[i].max(), 600)
-            map = plt.contourf(self.x_site_matrix, self.y_site_matrix, labels[i],levels,cmap=cmap) 
-            pic_name = f'{i}_{mode}_label.png'
-            ax = plt.gca()
-            ax.set_aspect(1) 
-            plt.colorbar(map,fraction=0.02, pad=0.03,
-                         ticks=np.linspace(labels[i].min(), labels[i].max(), 5),
-                         format = '%.1e')
-            plt.title(f"{mode} label data of type {i}")
-            pic_path = os.path.join(pic_folder, pic_name)
-            plt.savefig(pic_path, dpi=dpi)
-            print_rank_0(f'label picture saved in {pic_path}')
-            plt.close()
-            
-            map = plt.contourf(self.x_site_matrix, self.y_site_matrix, pred[i],levels,cmap=cmap) 
-            pic_name = f'{i}_{mode}_pred.png'
-            ax = plt.gca()
-            ax.set_aspect(1) 
-            plt.colorbar(map,fraction=0.02, pad=0.03,
-                         ticks=np.linspace(labels[i].min(), labels[i].max(), 5),
-                         format = '%.1e')
-            plt.title(f"{mode} pred data of type {i}")
-            pic_path = os.path.join(pic_folder, pic_name)
-            plt.savefig(pic_path, dpi=dpi)
-            print_rank_0(f'pred picture saved in {pic_path}')
+            min_max = [labels[i].min(), labels[i].max()]
+            self.plot_test_figure(self, min_max, labels[i], i, "label", mode, pic_folder, dpi=dpi)
+            self.plot_test_figure(self, min_max, pred[i], i, "pred", mode, pic_folder, dpi=dpi)
+
+            min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
+            self.plot_test_figure(self, min_max, labels[i]-pred[i], i, "delt", mode, pic_folder, dpi=dpi)
             plt.close()
 
-            levels=np.linspace((labels[i]-pred[i]).min(), (labels[i]-pred[i]).max(), 600)
-            map = plt.contourf(self.x_site_matrix, self.y_site_matrix, labels[i]-pred[i],levels,cmap=cmap) 
-            pic_name = f'{i}_{mode}_delt.png'
-            ax = plt.gca()
-            ax.set_aspect(1) 
-            plt.colorbar(map,fraction=0.02, pad=0.03,
-                         ticks=np.linspace((labels[i]-pred[i]).min(), (labels[i]-pred[i]).max(), 5),
-                         format = '%.1e')
-            plt.title(f"{mode} delt data of type {i}")
-            pic_path = os.path.join(pic_folder, pic_name)
-            plt.savefig(pic_path, dpi=dpi)
-            print_rank_0(f'delt picture saved in {pic_path}')
-            plt.close()
-
+    def plot_test_figure(self, min_max, data, data_type, data_name, mode, pic_folder, dpi=300):
+        cmap = 'RdBu_r'
+        levels = np.linspace(min_max[0], min_max[1], 600)
+        map = plt.contourf(self.x_site_matrix, self.y_site_matrix, data,levels,cmap=cmap) 
+        pic_name = f'{data_type}_{mode}_{data_name}.png'
+        ax = plt.gca()
+        ax.set_aspect(1) 
+        plt.colorbar(map,fraction=0.02, pad=0.03,
+                     ticks=np.linspace(min_max[0], min_max[1], 5),
+                     format = '%.1e')
+        plt.title(f"{mode} {data_name} data of type {data_type}")
+        plt.xlabel('x axis')
+        plt.ylabel('y axis')
+        pic_path = os.path.join(pic_folder, pic_name)
+        plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
+        print_rank_0(f'{data_name} picture saved in {pic_path}')
+        plt.close()
 
     def plot_learning_curve(self,loss_record, model_path, dpi=300, title=''):
         ''' Plot learning curve of your DNN (train & valid loss) '''
@@ -271,9 +247,8 @@ class modeltrain():
         x_1 = range(total_steps)
         x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
         figure(figsize=(6, 4))
-        plt.plot(x_1, loss_record['train_loss'], c='tab:red', label='train')
-        plt.plot(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
-        plt.ylim(0.0, 5.)
+        plt.semilogx(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
+        plt.semilogx(x_1, loss_record['train_loss'], c='tab:red', label='train')
         plt.xlabel('Training steps')
         plt.ylabel('MSE loss')
         plt.title('Learning curve of {}'.format(title))

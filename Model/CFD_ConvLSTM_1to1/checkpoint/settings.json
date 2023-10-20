@@ -25,7 +25,7 @@
     "valid_ratio": 0.1,
     "num_workers": 1,
     "net_type": "CFD_ConLSTM",
-    "actfun": "relu",
+    "actfun": "Relu",
     "max_epoch": 500,
     "learnrate": 0.01,
     "lossfun": "MSE",

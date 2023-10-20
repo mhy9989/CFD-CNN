@@ -29,9 +29,9 @@ class CFD_ConLSTM(nn.Module):
             Convblock(512, 1024, (3, 15)),
             nn.MaxPool2d((2,4)),
         )
-
         
         self.fc = nn.Linear(self.width, self.height * self.width)
+        
     def forward(self, x):
         x = self.conv_layers(x)
         x = x.flatten(start_dim=1)
