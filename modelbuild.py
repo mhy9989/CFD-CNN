@@ -27,7 +27,10 @@ def Initialize(args):
         torch.cuda.manual_seed_all(args.seed)
 
     if args.local_rank == -1:
-        args.device = torch.device("cuda:0")
+        if torch.cuda.is_available():
+            args.device = torch.device("cuda:0")
+        else:
+            args.device = torch.device("cpu")
         args.global_rank = 0
         args.world_size = 1
     else:
@@ -94,11 +97,14 @@ class modelbuild():
         args = Initialize(args)
         trainlen = int((1 - args.valid_ratio) * (args.data_num - args.data_delt -1))
         args.steps_per_epoch = math.ceil(trainlen/args.world_size)
-
+        if args.print_ds_output:
+            steps_per_print = args.steps_per_epoch
+        else:
+            steps_per_print = args.max_epoch
 
         ds_config = get_train_ds_config(offload=ds_args.offload, 
                                         stage=ds_args.zero_stage,
-                                        steps_per_print=args.steps_per_epoch)
+                                        steps_per_print=steps_per_print)
         
         ds_config['train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
         

@@ -30,7 +30,7 @@
     "learnrate": 0.001,
     "lossfun": "MSE",
     "optim": "Adam",
-    "distributed": true,
+    "print_ds_output": true,
     "modelname": "CFD_ConvLSTM_1to1",
     "model_path": "./Model/CFD_ConvLSTM_1to1",
     "description": "CFD ConvLSTM 1 to 1",
