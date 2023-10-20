@@ -74,7 +74,7 @@ class modeltrain():
 
         # Scheduler can be customized
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
-        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=, epochs=n_epochs)
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=args.steps_per_epoch, epochs=n_epochs)
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         # Deepspeed initialize
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
@@ -92,7 +92,7 @@ class modeltrain():
                 train_sampler.set_epoch(epoch)
             tic = time.time()
             # ---------- Training ----------
-            train_loss = self.train_epoch(model,train_dataloader,criterion,optimizer,lr_scheduler)
+            train_loss = self.train_epoch(model,train_dataloader,criterion)
             #print_rank_0(optimizer.state_dict()['param_groups'][0]['lr'])
             data_record["train_loss"].append(train_loss) 
             print_rank_0(f'[ Train | {epoch + 1:03d}/{n_epochs:03d} ] loss = {train_loss:.5e}')
@@ -126,7 +126,7 @@ class modeltrain():
         print_rank_0('Finished training after {} epochs'.format(epoch))
         return data_record,model
     
-    def train_epoch(self,model,trainloader,criterion,optimizer,lr_scheduler):
+    def train_epoch(self,model,trainloader,criterion):
         model.train()
         train_loss = []
         device = model.device
@@ -138,13 +138,11 @@ class modeltrain():
             labels = labels.to(device)
             pred = model(inputs)
             loss = criterion(pred, labels)
-            optimizer.zero_grad()
             model.backward(loss)
-            optimizer.step()
+            model.step()
             if dist.is_initialized():
                 loss = get_all_reduce_mean(loss)
             train_loss.append(loss.detach().cpu().item())
-        lr_scheduler.step(np.mean(train_loss))
         return np.mean(train_loss)
 
 
