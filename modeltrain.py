@@ -123,7 +123,7 @@ class modeltrain():
         
         save_json(data_record,json_file_path)
 
-        print_rank_0('Finished training after {} epoch2s'.format(epoch+1))
+        print_rank_0('Finished training after {} epochs'.format(epoch+1))
         return data_record,model
     
     def train_epoch(self,model,trainloader,criterion):
