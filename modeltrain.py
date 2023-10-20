@@ -14,9 +14,6 @@ from DataDefine import get_datloader
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from torchsummary import summary
 from rich.progress import track
-
-
-
 matplotlib.use('AGG')
 import time
 
@@ -57,7 +54,7 @@ class modeltrain():
             self.plot_learning_curve(data_record, model_path, 300,title='CFD-ConvLSTM model')
             self.test_model(model, model_path,test_dataset,data_scaler_list)
         if dist.is_initialized():
-                dist.barrier()
+            dist.barrier()
 
 
     def train_model(self, train_dataloader,train_sampler, valid_dataloader, model_path):
@@ -76,7 +73,8 @@ class modeltrain():
         best_loss = 10.
 
         # Scheduler can be customized
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
+        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=, epochs=n_epochs)
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         # Deepspeed initialize
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
@@ -90,7 +88,8 @@ class modeltrain():
         rank = args.global_rank
         
         for epoch in range(0,n_epochs):
-            train_sampler.set_epoch(epoch)
+            if dist.is_initialized():
+                train_sampler.set_epoch(epoch)
             tic = time.time()
             # ---------- Training ----------
             train_loss = self.train_epoch(model,train_dataloader,criterion,optimizer,lr_scheduler)

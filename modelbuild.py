@@ -8,6 +8,7 @@ import torch.backends.cudnn as cudnn
 import random
 import torch.distributed as dist
 import deepspeed
+import math
 from utils.utils import print_rank_0, json2Parser
 from utils.ds_utils import *
 
@@ -91,6 +92,9 @@ class modelbuild():
                             args.data_range[1][1]-args.data_range[1][0]
                           ]
         args = Initialize(args)
+        trainlen = int((1 - args.valid_ratio) * (args.data_num - args.data_delt -1))
+        args.steps_per_epoch = math.ceil(trainlen/args.world_size)
+
 
         ds_config = get_train_ds_config(offload=ds_args.offload, stage=ds_args.zero_stage)
         
