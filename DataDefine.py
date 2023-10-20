@@ -25,6 +25,7 @@ def get_datloader(args):
             args.data_num,
             args.data_delt)
         data_scaler_list = dataset.scaler_list
+        print_rank_0(f"length of all dataset: {len(dataset)}")
         # Split dataset into training dataset, validation dataset and test_dataset
         # The last line of data is test data
         test_dataset = dataset[-1]
@@ -34,6 +35,9 @@ def get_datloader(args):
         trainlen = int((1 - args.valid_ratio) * len(dataset))
         lengths = [trainlen, len(dataset) - trainlen]
         train_dataset, valid_dataset = random_split(dataset, lengths)
+        print_rank_0(f"length of input dataset: {len(dataset)}")
+        print_rank_0(f"length of train_dataset: {len(train_dataset)}")
+        print_rank_0(f"length of train_dataset: {len(valid_dataset)}")
 
         # DataLoaders creation:
         if args.local_rank == -1:
