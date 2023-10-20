@@ -214,7 +214,7 @@ class modeltrain():
         for i in range(data_type_num):
             min_max = [labels[i].min(), labels[i].max()]
             self.plot_test_figure(min_max, labels[i], i, "label", mode, pic_folder, dpi)
-            self.plot_test_figure(self, min_max, pred[i], i, "pred", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, pred[i], i, "pred", mode, pic_folder, dpi)
 
             min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
             self.plot_test_figure(min_max, labels[i]-pred[i], i, "delt", mode, pic_folder, dpi)
