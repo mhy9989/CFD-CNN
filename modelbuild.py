@@ -100,7 +100,7 @@ class modelbuild():
         if args.print_ds_output:
             steps_per_print = args.steps_per_epoch
         else:
-            steps_per_print = args.max_epoch
+            steps_per_print = args.max_epoch * args.steps_per_epoch
 
         ds_config = get_train_ds_config(offload=ds_args.offload, 
                                         stage=ds_args.zero_stage,
