@@ -11,6 +11,8 @@ import deepspeed
 import math
 from utils.utils import print_rank_0, json2Parser
 from utils.ds_utils import *
+from models import *
+from easydict import EasyDict as edict
 
 def Initialize(args):
     """Initialize training environment.
@@ -33,6 +35,7 @@ def Initialize(args):
             args.device = torch.device("cpu")
         args.global_rank = 0
         args.world_size = 1
+        args.dist = False
     else:
         torch.cuda.set_device(args.local_rank)
         args.device = torch.device("cuda", args.local_rank)
@@ -41,6 +44,7 @@ def Initialize(args):
         deepspeed.init_distributed()
         args.global_rank = dist.get_rank()
         args.world_size = dist.get_world_size()
+        args.dist = True
 
     return args
 
@@ -59,14 +63,23 @@ class modelbuild():
         }
         net = {
             'CFD_ConLSTM': CFD_ConLSTM,
+            "SimVP_Model": SimVP_Model,
         }
-        self.net = net[args.net_type](act_funs[args.actfun],args.data_out_shape,args.device)
+        if args.net_type == 'CFD_ConLSTM':
+            self.net = net[args.net_type](act_funs[args.actfun],args.data_out_shape,args.device)
+        else:
+            model_config = edict(args.model_config)
+            model_config.in_shape = args.data_previous, \
+                                    args.data_type_num, \
+                                    args.data_height, \
+                                    args.data_width,
+            self.net = net[args.net_type](**model_config)
         print_rank_0(f"The neural network is created. Network type: {args.net_type}")
 
     def setModel(self, args):
         """Set the neural network."""
         optim_hparas = {
-            'lr': args.learnrate,
+            'lr': args.lr,
         }
         self.optimizer= getattr(optim, args.optim)(
         self.net.parameters(), **optim_hparas)
@@ -95,7 +108,7 @@ class modelbuild():
                             args.data_range[1][1]-args.data_range[1][0]
                           ]
         args = Initialize(args)
-        trainlen = int((1 - args.valid_ratio) * (args.data_num - args.data_delt -1))
+        trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after))
         args.steps_per_epoch = math.ceil(trainlen/args.world_size)
         if args.print_ds_output:
             steps_per_print = args.steps_per_epoch
@@ -114,7 +127,7 @@ class modelbuild():
             args.gradient_accumulation_steps
 
 
-        if dist.is_initialized():
+        if args.dist:
             dist.barrier()
         self.buildModel(args)
         self.setModel(args)
