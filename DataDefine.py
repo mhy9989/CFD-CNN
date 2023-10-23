@@ -23,12 +23,14 @@ def get_datloader(args):
             args.data_range,
             args.data_shape,
             args.data_num,
-            args.data_delt)
+            args.data_previous,
+            args.data_after)
         data_scaler_list = dataset.scaler_list
         print_rank_0(f"\nlength of all dataset: {len(dataset)}")
         # Split dataset into training dataset, validation dataset and test_dataset
         # The last line of data is test data
         test_dataset = dataset[-1]
+        
         # Reset the length of dataset, del last line
         dataset.custom_length -= 1
 
@@ -37,7 +39,10 @@ def get_datloader(args):
         train_dataset, valid_dataset = random_split(dataset, lengths)
         print_rank_0(f"length of input dataset: {len(dataset)}")
         print_rank_0(f"length of train_dataset: {len(train_dataset)}")
-        print_rank_0(f"length of valid_dataset: {len(valid_dataset)}\n")
+        print_rank_0(f"length of valid_dataset: {len(valid_dataset)}")
+
+        print_rank_0(f"shape of input_data: {test_dataset[0].shape}")
+        print_rank_0(f"shape of label_data: {test_dataset[1].shape}\n")
 
         # DataLoaders creation:
         if args.local_rank == -1:
@@ -56,7 +61,7 @@ def get_datloader(args):
                                     num_workers=args.num_workers,
                                     batch_size=args.per_device_valid_batch_size)
 
-        return train_dataloader, valid_dataloader, test_dataset, train_sampler, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+        return train_dataloader, valid_dataloader, test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
 
 class CFD_Dataset(Dataset):
     ''' Dataset for loading and preprocessing the CFD data '''
@@ -69,15 +74,17 @@ class CFD_Dataset(Dataset):
                  data_range,
                  data_shape,
                  data_num,
-                 data_delt,):
-        
+                 data_previous,
+                 data_after):
+
         # Read inputs
         self.data_type_num, self.height, self.width = data_shape
-        self.data_delt = data_delt
+        self.data_previous = data_previous
+        self.data_after = data_after
         self.data_num = data_num
         self.data_range = data_range
         self.scaler_list = []
-        self.custom_length = int(self.data_num - self.data_delt)
+        self.custom_length = int(self.data_num - self.data_previous - self.data_after + 1)
         # Data Standard
         ''' #StandardScaler()
         for i in range(self.data_type_num):
@@ -129,26 +136,27 @@ class CFD_Dataset(Dataset):
         ny_range = self.data_range[0]
         nx_range = self.data_range[1]
         data_type_num = self.data_type_num
-        batch_num = self.data_delt + 1 #input: data_delt, label: 1
-        input_data_list = np.zeros((data_type_num,batch_num, ny*nx))
+        batch_num = self.data_previous + self.data_after #batch: num of data_previous + num of data_after
+        input_data_list = np.zeros((batch_num, data_type_num,ny*nx))
 
         # Read all data
-        for j in range(index,index+batch_num):
-            data = np.loadtxt(self.data_path_list[j],skiprows=2)
+        # input_data_list: (batch, data_type, height * width)
+        for i in range(index,index+batch_num):
+            data = np.loadtxt(self.data_path_list[i],skiprows=2)
             x_site = data[:nx*ny:,0]
             y_site = data[:nx*ny,1]
-            for i in range(data_type_num):
-                input_data_list[i][j-index] = data[0:nx*ny,i+2]
+            for j in range(data_type_num):
+                input_data_list[i-index][j] = data[0:nx*ny,j+2]
         
         # Reshape data: (ny * nx) -> (ny, nx)
         x_site_matrix = x_site.reshape(ny, nx)
         y_site_matrix = y_site.reshape(ny, nx)
 
-        # data_matrix: (data_type, batch, height, width)
-        data_matrix = np.zeros((data_type_num,batch_num, ny, nx))
-        for i in range(data_type_num):
-            input_data_list[i] = self.scaler_list[i].transform(input_data_list[i])
-            for j in range(batch_num):
+        # data_matrix: (batch, data_type, height, width)
+        data_matrix = np.zeros((batch_num, data_type_num, ny, nx))
+        for j in range(data_type_num):
+            input_data_list[:][j] = self.scaler_list[j].transform(input_data_list[:][j])
+            for i in range(batch_num):
                 matrix = input_data_list[i][j]
                 # Reshape data: (ny * nx) -> (ny, nx)
                 data_matrix[i][j] = matrix.reshape(ny, nx)
@@ -156,18 +164,15 @@ class CFD_Dataset(Dataset):
         # Convert Data into PyTorch tensors
         self.x_site_matrix = torch.Tensor(x_site_matrix) #(height, width)
         self.y_site_matrix = torch.Tensor(y_site_matrix) #(height, width)
-        self.data_matrix = torch.Tensor(data_matrix)     #(data_type, batch, height, width)
+        self.data_matrix = torch.Tensor(data_matrix)     #(batch, data_type, height, width)
 
         self.x_site_matrix = self.x_site_matrix[ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
         self.y_site_matrix = self.y_site_matrix[ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
 
-        # Dimensionality reduction: 
-        self.data_matrix = self.data_matrix.reshape(data_type_num, batch_num,-1)
-        #input = self.data_matrix[:, :-1]                                #(data_type, data_delt, height * width)
-        input = self.data_matrix[:, :-1].reshape(data_type_num*self.data_delt, ny, nx) #(data_type * data_delt, height, width)
-        label = self.data_matrix[:, -1].reshape(data_type_num, ny, nx)  #(data_type, height, width)
-        input_out = input[:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
-        label_out = label[:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        input = self.data_matrix[:self.data_previous]            #(data_previous, data_type, height, width)
+        label = self.data_matrix[self.data_previous:batch_num]   #(data_after, data_type, height, width)
+        input_out = input[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        label_out = label[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
         return input_out, label_out
 
     def __len__(self):
