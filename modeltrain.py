@@ -51,7 +51,7 @@ class modeltrain():
         data_record,model = self.train_model(train_dataloader, valid_dataloader,model_path)
         
         if self.rank == 0:
-            self.plot_learning_curve(data_record, model_path, 300,title='CFD-ConvLSTM model')
+            self.plot_learning_curve(data_record, model_path, 300,title='CFD-Conv model')
             self.test_model(model, model_path,test_dataset,data_scaler_list)
         if self.args.dist:
             dist.barrier()
@@ -80,6 +80,7 @@ class modeltrain():
             model_parameters=parameters,
             lr_scheduler = self.scheduler
             )
+        print_rank_0(f"device of model is: {model.device}")
         for epoch in range(0,n_epochs):
             if self.args.dist:
                 train_dataloader.sampler.set_epoch(epoch)
@@ -115,12 +116,14 @@ class modeltrain():
                     print_rank_0('[{:03d}/{:03d}] saving model with loss {:.5e}'.format(epoch + 1, n_epochs, best_loss))
                 if dist.is_initialized():
                     dist.barrier()
-            print_rank_0(f"\n")
-        
-        json_file_path = os.path.join(model_path, 'checkpoint',
+            
+            if (epoch +1)% 50 == 0 or (epoch +1) == n_epochs:
+                json_file_path = os.path.join(model_path, 'checkpoint',
                                 f'data_record.json')
-        
-        save_json(data_record,json_file_path)
+                save_json(data_record,json_file_path)
+                print_rank_0('Save the  data_record of {} epochs'.format(epoch+1))
+            
+            print_rank_0(f"\n")
 
         print_rank_0('Finished training after {} epochs'.format(epoch+1))
         return data_record,model
@@ -195,14 +198,14 @@ class modeltrain():
         data_type_num = self.args.data_type_num
         model.eval()
         device = model.device
+        
         with torch.no_grad():
             inputs, labels = test_dataset
             inputs = inputs.unsqueeze(0).to(device)
             labels = labels.unsqueeze(0).to(device)
             pred = model(inputs)
-
-        labels = labels.squeeze(0).cpu().numpy()
-        pred = pred.squeeze(0).cpu().numpy()
+        labels = labels[0,0].cpu().numpy()
+        pred = pred[0,0].cpu().numpy()
         mode = "Computed"
         self.comput_test(labels, pred, mode,model_path)
 
@@ -231,6 +234,7 @@ class modeltrain():
             print_rank_0(f"{mode} {i} mre: {mre[i]}")
 
         self.plot_test(labels,pred,300,model_path,mode)
+        print_rank_0(f"\n")
 
     def plot_test(self, labels,pred,dpi,model_path,mode):
         data_type_num = self.args.data_type_num
@@ -266,8 +270,9 @@ class modeltrain():
         ''' Plot learning curve of your DNN (train & valid loss) '''
         total_steps = len(loss_record['train_loss'])
         x_1 = range(total_steps)
-        x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
-        plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
+        if self.args.valid_ratio != 0:
+            x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
+            plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
         plt.semilogy(x_1, loss_record['train_loss'], c='tab:red', label='train')
         plt.xlabel('Training steps')
         plt.ylabel('MSE loss')

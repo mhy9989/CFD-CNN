@@ -146,7 +146,7 @@ class CFD_Dataset(Dataset):
             x_site = data[:nx*ny:,0]
             y_site = data[:nx*ny,1]
             for j in range(data_type_num):
-                input_data_list[i-index][j] = data[0:nx*ny,j+2]
+                input_data_list[i-index, j] = data[0:nx*ny,j+2]
         
         # Reshape data: (ny * nx) -> (ny, nx)
         x_site_matrix = x_site.reshape(ny, nx)
@@ -155,11 +155,11 @@ class CFD_Dataset(Dataset):
         # data_matrix: (batch, data_type, height, width)
         data_matrix = np.zeros((batch_num, data_type_num, ny, nx))
         for j in range(data_type_num):
-            input_data_list[:][j] = self.scaler_list[j].transform(input_data_list[:][j])
+            input_data_list[:,j] = self.scaler_list[j].transform(input_data_list[:,j])
             for i in range(batch_num):
-                matrix = input_data_list[i][j]
+                matrix = input_data_list[i, j]
                 # Reshape data: (ny * nx) -> (ny, nx)
-                data_matrix[i][j] = matrix.reshape(ny, nx)
+                data_matrix[i, j] = matrix.reshape(ny, nx)
         
         # Convert Data into PyTorch tensors
         self.x_site_matrix = torch.Tensor(x_site_matrix) #(height, width)
@@ -173,6 +173,8 @@ class CFD_Dataset(Dataset):
         label = self.data_matrix[self.data_previous:batch_num]   #(data_after, data_type, height, width)
         input_out = input[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
         label_out = label[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+
+
         return input_out, label_out
 
     def __len__(self):

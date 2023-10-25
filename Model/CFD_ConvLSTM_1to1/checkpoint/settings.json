@@ -1,11 +1,11 @@
 {
     "seed": 2023,
     "data_path": "../flow2d-t",
-    "data_num": 10,
+    "data_num": 201,
     "data_type_num": 1,
     "data_width": 1181,
     "data_height": 220,
-    "data_range": [[0,128],[200,328]],
+    "data_range": [[0,192],[0,1180]],
     "data_mean": [
         3.046747753584717
     ],
@@ -18,9 +18,9 @@
     "data_min": [
         0.80469401
     ],
-    "data_previous": 5,
+    "data_previous": 1,
     "data_after": 1,
-    "per_device_train_batch_size": 1,
+    "per_device_train_batch_size": 4,
     "per_device_valid_batch_size": 1,
     "gradient_accumulation_steps": 1,
     "valid_ratio": 0,

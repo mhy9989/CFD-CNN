@@ -1,7 +1,7 @@
 #!/bin/bash                
 #SBATCH -J CFD-ConvLSTM
-#SBATCH -n 12
-#SBATCH -N 3
+#SBATCH -n 8
+#SBATCH -N 2
 #SBATCH --gres=dcu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --ntasks-per-socket=1
