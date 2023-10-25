@@ -20,7 +20,7 @@ def main():
         print(data_path)
         data = np.loadtxt(data_path,skiprows=2)
         for i in range(args.data_type_num):
-            input_data_list[i][j-1] = data[:,i+2]
+            input_data_list[i, j-1] = data[:, i+2]
     
     mean = []
     std = []
