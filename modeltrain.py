@@ -56,6 +56,29 @@ class modeltrain():
         if self.args.dist:
             dist.barrier()
 
+    def test_CFD(self,model_path,num):
+        r"""test the DeepCK net. The Loss will be saved as .png.
+
+        Parameters
+        ----------
+        model_path : str
+            The path of the model.
+
+        """
+        #Make Dataset
+        custom_length = int(self.data_num - self.data_previous - self.data_after + 1)
+        if int(num) < (custom_length) and num >= 0:
+            test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
+                = get_datloader(self.args, "test", num)
+        else:
+            print_rank_0(f"num {num} out of data range")
+        model=self.net
+        #Training
+        if self.rank == 0:
+            self.test_model(model, model_path,test_dataset,data_scaler_list,dir_name = f"pic_{num}")
+        if self.args.dist:
+            dist.barrier()
+
 
     def train_model(self, train_dataloader, valid_dataloader, model_path):
         ''' Model training '''
@@ -194,7 +217,7 @@ class modeltrain():
                 valid_loss.append(loss.detach().cpu().item())
         return np.mean(valid_loss)
 
-    def test_model(self, model, model_path,test_dataset,data_scaler_list):
+    def test_model(self, model, model_path,test_dataset,data_scaler_list,dir_name = "pic"):
         n_epochs = self.args.max_epoch
         checkpoint_path = os.path.join(model_path, 'checkpoint',
                                 f'model_{n_epochs}.pt')
@@ -212,15 +235,15 @@ class modeltrain():
         labels = labels[0,0].cpu().numpy()
         pred = pred[0,0].cpu().numpy()
         mode = "Computed"
-        self.comput_test(labels, pred, mode,model_path)
+        self.comput_test(labels, pred, mode,model_path, dir_name)
 
         for i in range(data_type_num):
             labels[i] = data_scaler_list[i].inverse_transform(labels[i])
             pred[i] = data_scaler_list[i].inverse_transform(pred[i])
         mode = "Original"
-        self.comput_test(labels, pred, mode,model_path)
+        self.comput_test(labels, pred, mode,model_path, dir_name)
 
-    def comput_test(self, labels, pred,mode,model_path):
+    def comput_test(self, labels, pred,mode,model_path, dir_name = "pic"):
         data_type_num = self.args.data_type_num
         mse = [0 for _ in range(data_type_num)]
         rmse = [0 for _ in range(data_type_num)]
@@ -238,12 +261,12 @@ class modeltrain():
             print_rank_0(f"{mode} {i} MAE: {mae[i]}")
             print_rank_0(f"{mode} {i} mre: {mre[i]}")
 
-        self.plot_test(labels,pred,300,model_path,mode)
+        self.plot_test(labels,pred,300,model_path,mode, dir_name)
         print_rank_0(f"\n")
 
-    def plot_test(self, labels,pred,dpi,model_path,mode):
+    def plot_test(self, labels,pred,dpi,model_path,mode, dir_name = "pic"):
         data_type_num = self.args.data_type_num
-        pic_folder = os.path.join(model_path, 'pic',mode)
+        pic_folder = os.path.join(model_path, dir_name, mode)
         os.makedirs(pic_folder, exist_ok=True)
         for i in range(data_type_num):
             min_max = [labels[i].min(), labels[i].max()]
@@ -271,7 +294,7 @@ class modeltrain():
         print_rank_0(f'{data_name} picture saved in {pic_path}')
         plt.close()
 
-    def plot_learning_curve(self,loss_record, model_path, dpi=300, title=''):
+    def plot_learning_curve(self,loss_record, model_path,dpi=300, title='', dir_name = "pic"):
         ''' Plot learning curve of your DNN (train & valid loss) '''
         total_steps = len(loss_record['train_loss'])
         x_1 = range(total_steps)
@@ -285,7 +308,7 @@ class modeltrain():
         plt.legend()
 
         pic_name = f'data_record.png'
-        pic_folder = os.path.join(model_path, 'pic')
+        pic_folder = os.path.join(model_path, dir_name)
         os.makedirs(pic_folder, exist_ok=True)
         pic_path = os.path.join(pic_folder, pic_name)
         print_rank_0(f'simulation picture saved in {pic_path}')
