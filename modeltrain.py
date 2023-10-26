@@ -66,6 +66,7 @@ class modeltrain():
                 "valid_loss" : []
             }
         best_loss = 10.
+        best_epoch = 0
 
         # Scheduler can be customized
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
@@ -107,7 +108,8 @@ class modeltrain():
             else:
                 new_loss = train_loss
             if new_loss < best_loss:
-                best_loss = new_loss
+                best_loss = new_loss 
+                best_epoch = epoch + 1
                 if self.rank == 0:
                     checkpoint_path = os.path.join(model_path, 'checkpoint',
                                     f'model_{n_epochs}.pt')
@@ -126,6 +128,9 @@ class modeltrain():
             print_rank_0(f"\n")
 
         print_rank_0('Finished training after {} epochs'.format(epoch+1))
+        print_rank_0(f'Best loss is: {best_loss:.5e}')
+        print_rank_0(f'Best loss epoch is: {best_epoch:03d}')
+        print_rank_0(f'\n')
         return data_record,model
     
     def _predict(self, inputs, model):
