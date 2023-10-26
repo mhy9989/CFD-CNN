@@ -66,13 +66,19 @@ class modeltrain():
 
         """
         #Make Dataset
-        custom_length = int(self.data_num - self.data_previous - self.data_after + 1)
+        custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
         if int(num) < (custom_length) and num >= 0:
             test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
                 = get_datloader(self.args, "test", num)
         else:
             print_rank_0(f"num {num} out of data range")
-        model=self.net
+            return
+        model, _, _, _ = deepspeed.initialize(
+            args=self.args,
+            config = self.ds_config,
+            model=self.net, 
+            optimizer = self.optimizer, 
+            )
         #Training
         if self.rank == 0:
             self.test_model(model, model_path,test_dataset,data_scaler_list,dir_name = f"pic_{num}")
@@ -256,10 +262,10 @@ class modeltrain():
             mae[i] = mean_absolute_error(labels[i], pred[i])
             mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-7))
 
-            print_rank_0(f"{mode} {i} MSE: {mse[i]}")
-            print_rank_0(f"{mode} {i} RMSE: {rmse[i]}")
-            print_rank_0(f"{mode} {i} MAE: {mae[i]}")
-            print_rank_0(f"{mode} {i} mre: {mre[i]}")
+            print_rank_0(f"{mode} {i} MSE: {mse[i]:.5e}")
+            print_rank_0(f"{mode} {i} RMSE: {rmse[i]:.5e}")
+            print_rank_0(f"{mode} {i} MAE: {mae[i]:.5e}")
+            print_rank_0(f"{mode} {i} mre: {mre[i]:.5e}")
 
         self.plot_test(labels,pred,300,model_path,mode, dir_name)
         print_rank_0(f"\n")
