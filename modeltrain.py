@@ -12,6 +12,7 @@ import deepspeed
 from utils.utils import print_rank_0, json2Parser, get_all_reduce_mean, save_json
 from DataDefine import get_datloader
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from skimage.metrics import structural_similarity
 from torchsummary import summary
 from rich.progress import track
 matplotlib.use('AGG')
@@ -67,7 +68,7 @@ class modeltrain():
         """
         #Make Dataset
         custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
-        if int(num) < (custom_length) and num >= 0:
+        if int(num) < (custom_length):
             test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
                 = get_datloader(self.args, "test", num)
         else:
@@ -255,17 +256,20 @@ class modeltrain():
         rmse = [0 for _ in range(data_type_num)]
         mae = [0 for _ in range(data_type_num)]
         mre = [0 for _ in range(data_type_num)]
+        ssim = [0 for _ in range(data_type_num)]
 
         for i in range(data_type_num):
             mse[i] = mean_squared_error(labels[i], pred[i])
             rmse[i] = np.sqrt(mse[i])
             mae[i] = mean_absolute_error(labels[i], pred[i])
             mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-7))
+            ssim[i] = structural_similarity(labels[i],pred[i])
 
             print_rank_0(f"{mode} {i} MSE: {mse[i]:.5e}")
             print_rank_0(f"{mode} {i} RMSE: {rmse[i]:.5e}")
             print_rank_0(f"{mode} {i} MAE: {mae[i]:.5e}")
             print_rank_0(f"{mode} {i} mre: {mre[i]:.5e}")
+            print_rank_0(f"{mode} {i} ssim: {ssim[i]:.5e}")
 
         self.plot_test(labels,pred,300,model_path,mode, dir_name)
         print_rank_0(f"\n")
