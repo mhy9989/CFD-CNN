@@ -145,7 +145,7 @@ class modeltrain():
                                     f'model_{n_epochs}.pt')
                     save_dict = model.state_dict()
                     torch.save(save_dict, checkpoint_path)
-                    print_rank_0('[{:03d}/{:03d}] saving model with loss {:.5e}'.format(epoch + 1, n_epochs, best_loss))
+                    print_rank_0(f'[{epoch + 1:03d}/{n_epochs:03d}] Saving model with loss {best_loss:.5e}')
                 if dist.is_initialized():
                     dist.barrier()
             
@@ -153,11 +153,11 @@ class modeltrain():
                 json_file_path = os.path.join(model_path, 'checkpoint',
                                 f'data_record.json')
                 save_json(data_record,json_file_path)
-                print_rank_0('Save the  data_record of {} epochs'.format(epoch+1))
+                print_rank_0(f'Save the data_record of {epoch+1} epochs')
             
             print_rank_0(f"\n")
 
-        print_rank_0('Finished training after {} epochs'.format(epoch+1))
+        print_rank_0(f'Finished training after {epoch+1} epochs')
         print_rank_0(f'Best loss is: {best_loss:.5e}')
         print_rank_0(f'Best loss epoch is: {best_epoch:03d}')
         print_rank_0(f'\n')
@@ -257,19 +257,23 @@ class modeltrain():
         mae = [0 for _ in range(data_type_num)]
         mre = [0 for _ in range(data_type_num)]
         ssim = [0 for _ in range(data_type_num)]
+        max_re = [0 for _ in range(data_type_num)]
+        
 
         for i in range(data_type_num):
             mse[i] = mean_squared_error(labels[i], pred[i])
             rmse[i] = np.sqrt(mse[i])
             mae[i] = mean_absolute_error(labels[i], pred[i])
-            mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-7))
+            mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
+            max_re[i] = np.max(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
             ssim[i] = structural_similarity(labels[i],pred[i])
 
             print_rank_0(f"{mode} {i} MSE: {mse[i]:.5e}")
             print_rank_0(f"{mode} {i} RMSE: {rmse[i]:.5e}")
             print_rank_0(f"{mode} {i} MAE: {mae[i]:.5e}")
-            print_rank_0(f"{mode} {i} mre: {mre[i]:.5e}")
-            print_rank_0(f"{mode} {i} ssim: {ssim[i]:.5e}")
+            print_rank_0(f"{mode} {i} MRE: {mre[i]:.5e}")
+            print_rank_0(f"{mode} {i} SSIM: {ssim[i]:.5e}")
+            print_rank_0(f"{mode} {i} MAX_RE: {max_re[i]:.5e}")
 
         self.plot_test(labels,pred,300,model_path,mode, dir_name)
         print_rank_0(f"\n")
@@ -321,7 +325,7 @@ class modeltrain():
         pic_folder = os.path.join(model_path, dir_name)
         os.makedirs(pic_folder, exist_ok=True)
         pic_path = os.path.join(pic_folder, pic_name)
-        print_rank_0(f'simulation picture saved in {pic_path}')
+        print_rank_0(f'Simulation picture saved in {pic_path}')
         plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
         plt.close()
 

@@ -26,7 +26,7 @@ def get_datloader(args, mode = "train", test_num = -1):
             args.data_previous,
             args.data_after)
         data_scaler_list = dataset.scaler_list
-        print_rank_0(f"\nlength of all dataset: {len(dataset)}")
+        print_rank_0(f"\nLength of all dataset: {len(dataset)}")
         # Split dataset into training dataset, validation dataset and test_dataset
         # The last line of data is test data
         test_dataset = dataset[test_num]
@@ -39,12 +39,12 @@ def get_datloader(args, mode = "train", test_num = -1):
         trainlen = int((1 - args.valid_ratio) * len(dataset))
         lengths = [trainlen, len(dataset) - trainlen]
         train_dataset, valid_dataset = random_split(dataset, lengths)
-        print_rank_0(f"length of input dataset: {len(dataset)}")
-        print_rank_0(f"length of train_dataset: {len(train_dataset)}")
-        print_rank_0(f"length of valid_dataset: {len(valid_dataset)}")
+        print_rank_0(f"Length of input dataset: {len(dataset)}")
+        print_rank_0(f"Length of train_dataset: {len(train_dataset)}")
+        print_rank_0(f"Length of valid_dataset: {len(valid_dataset)}")
 
-        print_rank_0(f"shape of input_data: {test_dataset[0].shape}")
-        print_rank_0(f"shape of label_data: {test_dataset[1].shape}\n")
+        print_rank_0(f"Shape of input_data: {test_dataset[0].shape}")
+        print_rank_0(f"Shape of label_data: {test_dataset[1].shape}\n")
 
         # DataLoaders creation:
         if args.local_rank == -1:
