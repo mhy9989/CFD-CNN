@@ -284,11 +284,11 @@ class modeltrain():
         os.makedirs(pic_folder, exist_ok=True)
         for i in range(data_type_num):
             min_max = [labels[i].min(), labels[i].max()]
-            self.plot_test_figure(min_max, labels[i], i, "label", mode, pic_folder, dpi)
-            self.plot_test_figure(min_max, pred[i], i, "pred", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, labels[i], self.args.data_type[i], "label", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, pred[i], self.args.data_type[i], "pred", mode, pic_folder, dpi)
 
             min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
-            self.plot_test_figure(min_max, labels[i]-pred[i], i, "delt", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, labels[i]-pred[i], self.args.data_type[i], "delt", mode, pic_folder, dpi)
 
     def plot_test_figure(self, min_max, data, data_type, data_name, mode, pic_folder, dpi=300):
         cmap = 'RdBu_r'

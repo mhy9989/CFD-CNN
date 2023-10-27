@@ -2,7 +2,7 @@
     "seed": 2023,
     "data_path": "../flow2d-t",
     "data_num": 201,
-    "data_type_num": 1,
+    "data_type": ["T"],
     "data_width": 1181,
     "data_height": 220,
     "data_range": [[0,192],[0,1180]],

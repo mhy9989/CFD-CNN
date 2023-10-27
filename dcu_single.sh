@@ -18,7 +18,6 @@ APP="python3 -u $script_path \
     ${DEEPSPEED_ARGS} \
     "
 
-
 case ${lrank} in
 [0])
   export HIP_VISIBLE_DEVICES=0,1,2,3

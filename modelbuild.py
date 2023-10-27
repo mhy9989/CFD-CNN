@@ -99,6 +99,7 @@ class modelbuild():
         """Load setting and build model"""
         setting_path = os.path.join(model_path, 'checkpoint', f'settings.json')
         args = json2Parser(setting_path)
+        args.data_type_num = len(args.data_type)
         args.local_rank = ds_args.local_rank
         args.data_shape = [args.data_type_num,
                             args.data_height,
