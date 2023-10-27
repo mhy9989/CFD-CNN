@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-def get_datloader(args, mode = "train", test_num = -1):
+def get_datloader(args, mode = "train", test_num = 0):
         """Generate dataloader"""
         dataset = CFD_Dataset(
             args.data_path,
@@ -29,9 +29,15 @@ def get_datloader(args, mode = "train", test_num = -1):
         print_rank_0(f"\nLength of all dataset: {len(dataset)}")
         # Split dataset into training dataset, validation dataset and test_dataset
         # The last line of data is test data
-        test_dataset = dataset[test_num]
+        
         if mode!="train":
+            if test_num < 0:
+                test_num += len(dataset)
+            test_dataset = dataset[test_num]
             return test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+        else:
+            test_num = len(dataset) -1
+            test_dataset = dataset[test_num]
         
         # Reset the length of dataset, del last line
         dataset.custom_length -= 1
