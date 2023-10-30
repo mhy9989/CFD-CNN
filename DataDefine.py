@@ -13,63 +13,62 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def get_datloader(args, mode = "train", test_num = 0):
-        """Generate dataloader"""
-        dataset = CFD_Dataset(
-            args.data_path,
-            args.data_mean,
-            args.data_std,
-            args.data_max,
-            args.data_min,
-            args.data_range,
-            args.data_shape,
-            args.data_num,
-            args.data_previous,
-            args.data_after)
-        data_scaler_list = dataset.scaler_list
-        print_rank_0(f"\nLength of all dataset: {len(dataset)}")
-        # Split dataset into training dataset, validation dataset and test_dataset
-        # The last line of data is test data
-        
-        if mode!="train":
-            if test_num < 0:
-                test_num += len(dataset)
-            test_dataset = dataset[test_num]
-            return test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
-        else:
-            test_num = len(dataset) -1
-            test_dataset = dataset[test_num]
-        
-        # Reset the length of dataset, del last line
-        dataset.custom_length -= 1
+    """Generate dataloader"""
+    dataset = CFD_Dataset(
+        args.data_path,
+        args.data_mean,
+        args.data_std,
+        args.data_max,
+        args.data_min,
+        args.data_range,
+        args.data_shape,
+        args.data_num,
+        args.data_previous,
+        args.data_after)
+    data_scaler_list = dataset.scaler_list
+    print_rank_0(f"\nLength of all dataset: {len(dataset)}")
+    # Split dataset into training dataset, validation dataset and test_dataset
+    # The last line of data is test data
+    
+    if mode != "train":
+        if test_num < 0:
+            test_num += len(dataset)
+        test_dataset = dataset[test_num]
+        return test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+    else:
+        test_num = len(dataset) -1
+        test_dataset = dataset[test_num]
+    
+    # Reset the length of dataset, del last line
+    dataset.custom_length -= 1
+    trainlen = int((1 - args.valid_ratio) * len(dataset))
+    lengths = [trainlen, len(dataset) - trainlen]
+    train_dataset, valid_dataset = random_split(dataset, lengths)
+    
+    print_rank_0(f"Length of input dataset: {len(dataset)}")
+    print_rank_0(f"Length of train_dataset: {len(train_dataset)}")
+    print_rank_0(f"Length of valid_dataset: {len(valid_dataset)}")
+    print_rank_0(f"Shape of input_data: {test_dataset[0].shape}")
+    print_rank_0(f"Shape of label_data: {test_dataset[1].shape}\n")
 
-        trainlen = int((1 - args.valid_ratio) * len(dataset))
-        lengths = [trainlen, len(dataset) - trainlen]
-        train_dataset, valid_dataset = random_split(dataset, lengths)
-        print_rank_0(f"Length of input dataset: {len(dataset)}")
-        print_rank_0(f"Length of train_dataset: {len(train_dataset)}")
-        print_rank_0(f"Length of valid_dataset: {len(valid_dataset)}")
+    # DataLoaders creation:
+    if args.local_rank == -1:
+        train_sampler = RandomSampler(train_dataset)
+        vaild_sampler = SequentialSampler(valid_dataset)
+    else:
+        train_sampler = DistributedSampler(train_dataset)
+        vaild_sampler = DistributedSampler(valid_dataset)
 
-        print_rank_0(f"Shape of input_data: {test_dataset[0].shape}")
-        print_rank_0(f"Shape of label_data: {test_dataset[1].shape}\n")
-
-        # DataLoaders creation:
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(train_dataset)
-            vaild_sampler = SequentialSampler(valid_dataset)
-        else:
-            train_sampler = DistributedSampler(train_dataset)
-            vaild_sampler = DistributedSampler(valid_dataset)
-
-        train_dataloader = DataLoader(train_dataset,
-                                    sampler=train_sampler,
-                                    num_workers=args.num_workers,
-                                    batch_size=args.per_device_train_batch_size)
-        valid_dataloader = DataLoader(valid_dataset,
-                                    sampler=vaild_sampler,
-                                    num_workers=args.num_workers,
-                                    batch_size=args.per_device_valid_batch_size)
-
-        return train_dataloader, valid_dataloader, test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+    train_dataloader = DataLoader(train_dataset,
+                                sampler=train_sampler,
+                                num_workers=args.num_workers,
+                                batch_size=args.per_device_train_batch_size)
+    valid_dataloader = DataLoader(valid_dataset,
+                                sampler=vaild_sampler,
+                                num_workers=args.num_workers,
+                                batch_size=args.per_device_valid_batch_size)
+    
+    return train_dataloader, valid_dataloader, test_dataset, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
 
 class CFD_Dataset(Dataset):
     ''' Dataset for loading and preprocessing the CFD data '''

@@ -41,7 +41,7 @@ def main():
     model_data = modelbuild().loadsetting(model_path,ds_args)
     model = modeltrain(model_data)
     #model.train_CFD(model_path)
-    model.test_CFD(model_path,0)
+    model.test_CFD(model_path,-1)
     #model.summary_model((1,220,1181),"cpu")
 
 
