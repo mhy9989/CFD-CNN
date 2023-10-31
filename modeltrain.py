@@ -97,6 +97,7 @@ class modeltrain():
             }
         best_loss = 10.
         best_epoch = 0
+        early_stop_cnt = 0
 
         # Scheduler can be customized
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
@@ -140,6 +141,7 @@ class modeltrain():
             if new_loss < best_loss:
                 best_loss = new_loss 
                 best_epoch = epoch + 1
+                early_stop_cnt = 0
                 if self.rank == 0:
                     checkpoint_path = os.path.join(model_path, 'checkpoint',
                                     f'model_{n_epochs}.pt')
@@ -148,6 +150,8 @@ class modeltrain():
                     print_rank_0(f'[{epoch + 1:03d}/{n_epochs:03d}] Saving model with loss {best_loss:.5e}')
                 if dist.is_initialized():
                     dist.barrier()
+            else:
+                early_stop_cnt += 1
             
             if (epoch +1)% 50 == 0 or (epoch +1) == n_epochs:
                 json_file_path = os.path.join(model_path, 'checkpoint',
@@ -156,6 +160,9 @@ class modeltrain():
                 print_rank_0(f'Save the data_record of {epoch+1} epochs')
             
             print_rank_0(f"\n")
+            print_rank_0("early_stop", self.args["early_stop"])
+            if early_stop_cnt > self.args.early_stop:
+                break
 
         print_rank_0(f'Finished training after {epoch+1} epochs')
         print_rank_0(f'Best loss is: {best_loss:.5e}')
@@ -230,7 +237,7 @@ class modeltrain():
                                 f'model_{n_epochs}.pt')
         model.load_state_dict(torch.load(checkpoint_path))
         print_rank_0(f"Successful load checkpoint!")
-        data_type_num = self.args.data_type_num
+        data_select_num = self.args.data_select_num
         model.eval()
         device = model.device
         
@@ -244,23 +251,23 @@ class modeltrain():
         mode = "Computed"
         self.comput_test(labels, pred, mode,model_path, dir_name)
 
-        for i in range(data_type_num):
-            labels[i] = data_scaler_list[i].inverse_transform(labels[i])
-            pred[i] = data_scaler_list[i].inverse_transform(pred[i])
+        for i in range(data_select_num):
+            labels[i] = data_scaler_list[self.args.data_select[i]].inverse_transform(labels[i])
+            pred[i] = data_scaler_list[self.args.data_select[i]].inverse_transform(pred[i])
         mode = "Original"
-        self.comput_test(labels, pred, mode,model_path, dir_name)
+        self.comput_test(labels, pred, mode, model_path, dir_name)
 
-    def comput_test(self, labels, pred,mode,model_path, dir_name = "pic"):
-        data_type_num = self.args.data_type_num
-        mse = [0 for _ in range(data_type_num)]
-        rmse = [0 for _ in range(data_type_num)]
-        mae = [0 for _ in range(data_type_num)]
-        mre = [0 for _ in range(data_type_num)]
-        ssim = [0 for _ in range(data_type_num)]
-        max_re = [0 for _ in range(data_type_num)]
+    def comput_test(self, labels, pred,mode, model_path, dir_name = "pic"):
+        data_select_num = self.args.data_select_num
+        mse = [0 for _ in range(data_select_num)]
+        rmse = [0 for _ in range(data_select_num)]
+        mae = [0 for _ in range(data_select_num)]
+        mre = [0 for _ in range(data_select_num)]
+        ssim = [0 for _ in range(data_select_num)]
+        max_re = [0 for _ in range(data_select_num)]
         
 
-        for i in range(data_type_num):
+        for i in range(data_select_num):
             mse[i] = mean_squared_error(labels[i], pred[i])
             rmse[i] = np.sqrt(mse[i])
             mae[i] = mean_absolute_error(labels[i], pred[i])
@@ -268,39 +275,39 @@ class modeltrain():
             max_re[i] = np.max(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
             ssim[i] = structural_similarity(labels[i],pred[i])
 
-            print_rank_0(f"{mode} {i} MSE: {mse[i]:.5e}")
-            print_rank_0(f"{mode} {i} RMSE: {rmse[i]:.5e}")
-            print_rank_0(f"{mode} {i} MAE: {mae[i]:.5e}")
-            print_rank_0(f"{mode} {i} MRE: {mre[i]:.5e}")
-            print_rank_0(f"{mode} {i} SSIM: {ssim[i]:.5e}")
-            print_rank_0(f"{mode} {i} MAX_RE: {max_re[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MSE: {mse[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} RMSE: {rmse[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MAE: {mae[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MRE: {mre[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} SSIM: {ssim[i]:.5e}")
+            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MAX_RE: {max_re[i]:.5e}")
 
         self.plot_test(labels,pred,300,model_path,mode, dir_name)
         print_rank_0(f"\n")
 
     def plot_test(self, labels,pred,dpi,model_path,mode, dir_name = "pic"):
-        data_type_num = self.args.data_type_num
+        data_select_num = self.args.data_select_num
         pic_folder = os.path.join(model_path, dir_name, mode)
         os.makedirs(pic_folder, exist_ok=True)
-        for i in range(data_type_num):
+        for i in range(data_select_num):
             min_max = [labels[i].min(), labels[i].max()]
-            self.plot_test_figure(min_max, labels[i], self.args.data_type[i], "label", mode, pic_folder, dpi)
-            self.plot_test_figure(min_max, pred[i], self.args.data_type[i], "pred", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, labels[i], self.args.data_type[self.args.data_select[i]], "label", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, pred[i], self.args.data_type[self.args.data_select[i]], "pred", mode, pic_folder, dpi)
 
             min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
-            self.plot_test_figure(min_max, labels[i]-pred[i], self.args.data_type[i], "delt", mode, pic_folder, dpi)
+            self.plot_test_figure(min_max, labels[i]-pred[i], self.args.data_type[self.args.data_select[i]], "delt", mode, pic_folder, dpi)
 
-    def plot_test_figure(self, min_max, data, data_type, data_name, mode, pic_folder, dpi=300):
+    def plot_test_figure(self, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
         cmap = 'RdBu_r'
         levels = np.linspace(min_max[0], min_max[1], 600)
         map = plt.contourf(self.x_site_matrix, self.y_site_matrix, data,levels,cmap=cmap) 
-        pic_name = f'{data_type}_{mode}_{data_name}.png'
+        pic_name = f'{data_select}_{mode}_{data_name}.png'
         ax = plt.gca()
         ax.set_aspect(1) 
         plt.colorbar(map,fraction=0.02, pad=0.03,
                      ticks=np.linspace(min_max[0], min_max[1], 5),
                      format = '%.1e')
-        plt.title(f"{mode} {data_name} data of type {data_type}")
+        plt.title(f"{mode} {data_name} data of type {data_select}")
         plt.xlabel('x axis')
         plt.ylabel('y axis')
         pic_path = os.path.join(pic_folder, pic_name)

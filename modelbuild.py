@@ -70,9 +70,9 @@ class modelbuild():
         else:
             model_config = edict(args.model_config)
             model_config.in_shape = args.data_previous, \
-                                    args.data_type_num, \
+                                    args.data_select_num, \
                                     args.data_height, \
-                                    args.data_width,
+                                    args.data_width
             self.net = net[args.net_type](**model_config)
         print_rank_0(f"The neural network is created. Network type: {args.net_type}")
 
@@ -100,11 +100,12 @@ class modelbuild():
         setting_path = os.path.join(model_path, 'checkpoint', f'settings.json')
         args = json2Parser(setting_path)
         args.data_type_num = len(args.data_type)
+        args.data_select_num = len(args.data_select)
         args.local_rank = ds_args.local_rank
         args.data_shape = [args.data_type_num,
                             args.data_height,
                             args.data_width]
-        args.data_out_shape = [args.data_type_num,
+        args.data_out_shape = [args.data_select_num,
                             args.data_range[0][1]-args.data_range[0][0],
                             args.data_range[1][1]-args.data_range[1][0]
                           ]

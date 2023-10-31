@@ -32,7 +32,7 @@ def add_argument():
 
 def main():
     ## model name
-    modelname = 'CFD_ConvLSTM_1to1'
+    modelname = 'CFD_Conv1001_5to1'
     ## model path
     dir_path = os.path.dirname(os.path.abspath(__file__))
 
