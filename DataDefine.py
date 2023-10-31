@@ -16,6 +16,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     """Generate dataloader"""
     dataset = CFD_Dataset(
         args.data_path,
+        args.data_select,
         args.data_mean,
         args.data_std,
         args.data_max,
@@ -74,6 +75,7 @@ class CFD_Dataset(Dataset):
     ''' Dataset for loading and preprocessing the CFD data '''
     def __init__(self,
                  data_path,
+                 data_select,
                  data_mean,
                  data_std,
                  data_max,
@@ -87,6 +89,7 @@ class CFD_Dataset(Dataset):
         # Read inputs
         self.data_type_num, self.height, self.width = data_shape
         self.data_previous = data_previous
+        self.data_select = data_select
         self.data_after = data_after
         self.data_num = data_num
         self.data_range = data_range
@@ -112,7 +115,7 @@ class CFD_Dataset(Dataset):
         self.data_path_list = []
         # Read all data
         for i in range(1, 1+data_num):
-            flow_data_path = os.path.join(data_path , f"flowxy-{i:03d}.dat")
+            flow_data_path = os.path.join(data_path , f"flowxy-{i:04d}.dat")
             self.data_path_list.append(flow_data_path)
 
     def read_normalize(norm,mean,std,data=[]):
@@ -178,8 +181,8 @@ class CFD_Dataset(Dataset):
 
         input = self.data_matrix[:self.data_previous]            #(data_previous, data_type, height, width)
         label = self.data_matrix[self.data_previous:batch_num]   #(data_after, data_type, height, width)
-        input_out = input[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
-        label_out = label[:,:,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        input_out = input[:,self.data_select,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]] #(data_after, data_select, height, width)
+        label_out = label[:,self.data_select,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]] #(data_after, data_select, height, width)
 
 
         return input_out, label_out
