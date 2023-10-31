@@ -153,10 +153,10 @@ class CFD_Dataset(Dataset):
         # input_data_list: (batch, data_type, height * width)
         for i in range(index,index+batch_num):
             data = np.loadtxt(self.data_path_list[i],skiprows=2)
-            x_site = data[:nx*ny:,0]
+            x_site = data[:nx*ny,0]
             y_site = data[:nx*ny,1]
             for j in range(data_type_num):
-                input_data_list[i-index, j] = data[0:nx*ny,j+2]
+                input_data_list[i-index, j] = data[:nx*ny,j+2]
         
         # Reshape data: (ny * nx) -> (ny, nx)
         x_site_matrix = x_site.reshape(ny, nx)
