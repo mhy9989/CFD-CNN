@@ -227,6 +227,8 @@ class modeltrain():
                 labels = labels.to(device)
                 pred = model(inputs)
                 loss = criterion(pred, labels)
+                if self.args.dist:
+                    loss = get_all_reduce_mean(loss)
                 valid_loss.append(loss.detach().cpu().item())
         return np.mean(valid_loss)
 
