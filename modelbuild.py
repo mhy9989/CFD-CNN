@@ -110,7 +110,7 @@ class modelbuild():
                           ]
         args = Initialize(args)
         trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after))
-        args.steps_per_epoch = math.ceil(trainlen/args.world_size)
+        args.steps_per_epoch = math.ceil(trainlen/args.world_size/args.per_device_train_batch_size)
         if args.print_ds_output:
             steps_per_print = args.steps_per_epoch
         else:
