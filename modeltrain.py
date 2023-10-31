@@ -160,13 +160,12 @@ class modeltrain():
                 print_rank_0(f'Save the data_record of {epoch+1} epochs')
             
             print_rank_0(f"\n")
-            print_rank_0("early_stop", self.args["early_stop"])
             if early_stop_cnt > self.args.early_stop:
                 break
 
         print_rank_0(f'Finished training after {epoch+1} epochs')
         print_rank_0(f'Best loss is: {best_loss:.5e}')
-        print_rank_0(f'Best loss epoch is: {best_epoch:03d}')
+        print_rank_0(f'Best loss epoch is: {best_epoch}')
         print_rank_0(f'\n')
         return data_record,model
     
