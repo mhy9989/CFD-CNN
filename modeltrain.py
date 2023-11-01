@@ -225,7 +225,7 @@ class modeltrain():
             for inputs, labels in valid_pbar:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-                pred = model(inputs)
+                pred = self._predict(inputs, model)
                 loss = criterion(pred, labels)
                 if self.args.dist:
                     loss = get_all_reduce_mean(loss)
