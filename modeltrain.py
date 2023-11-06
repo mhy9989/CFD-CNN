@@ -118,6 +118,7 @@ class modeltrain():
                 train_dataloader.sampler.set_epoch(epoch)
             tic = time.time()
             # ---------- Training ----------
+            print_rank_0(f"lr = {optimizer.state_dict()['param_groups'][0]['lr']}")
             train_loss = self.train_epoch(model,train_dataloader,self.criterion)
             #print_rank_0(optimizer.state_dict()['param_groups'][0]['lr'])
             data_record["train_loss"].append(train_loss) 
