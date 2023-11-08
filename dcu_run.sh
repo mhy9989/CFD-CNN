@@ -33,7 +33,7 @@ rm -f hostfile
 for i in `scontrol show hostnames $SLURM_JOB_NODELIST`
 do
  echo "$i slots=4" >> hostfile
-done
+done25+-
 
 np=$(($NNODES*4))
 #module list
