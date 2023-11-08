@@ -53,7 +53,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     print_rank_0(f"Shape of label_data: {test_dataset[1].shape}\n")
 
     # DataLoaders creation:
-    if args.local_rank == -1:
+    if not args.dist:
         train_sampler = RandomSampler(train_dataset)
         vaild_sampler = SequentialSampler(valid_dataset)
     else:
