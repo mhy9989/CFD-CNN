@@ -16,7 +16,6 @@ def get_datloader(args, mode = "train", test_num = 0):
     """Generate dataloader"""
     dataset = CFD_Dataset(
         args.data_path,
-        args.coordinate_path,
         args.data_select,
         args.data_mean,
         args.data_std,
@@ -76,7 +75,6 @@ class CFD_Dataset(Dataset):
     ''' Dataset for loading and preprocessing the CFD data '''
     def __init__(self,
                  data_path,
-                 coordinate_path,
                  data_select,
                  data_mean,
                  data_std,
@@ -95,8 +93,6 @@ class CFD_Dataset(Dataset):
         self.data_after = data_after
         self.data_num = data_num
         self.data_range = data_range
-        ny_range = self.data_range[0]
-        nx_range = self.data_range[1]
         self.scaler_list = []
         self.custom_length = int(self.data_num - self.data_previous - self.data_after + 1)
         # Data Standard
@@ -115,35 +111,81 @@ class CFD_Dataset(Dataset):
             scaler.scale_ = scale
             scaler.min_= custom_min - data_min[i] * scale
             self.scaler_list.append(scaler)
-        
-        site_matrix = np.load(coordinate_path)
-        data_matrix = np.load(data_path)
-        self.data_total_num = data_matrix.shape[0]
-        self.x_site_matrix = site_matrix[0][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
-        self.y_site_matrix = site_matrix[1][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
 
-        # Reshape data: (num, data_type,  height, width) -> (num, data_type, height * width)
-        data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num,-1)
-        for i in range(self.data_type_num):
-            data_matrix[:,i] = self.scaler_list[i].transform(data_matrix[:,i])
-        
-        self.data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num, self.height, self.width)
-        self.data_matrix = self.data_matrix[:, self.data_select, ny_range[0]:ny_range[1], nx_range[0]:nx_range[1]]
+        self.data_path_list = []
+        # Read all data
+        for i in range(1, 1+data_num):
+            flow_data_path = os.path.join(data_path , f"flowxy-{i:04d}.dat")
+            self.data_path_list.append(flow_data_path)
+
+    def read_normalize(norm,mean,std,data=[]):
+        scaler = StandardScaler()
+        scaler.mean_=norm[mean]
+        scaler.scale_=norm[std]
+        data = scaler.transform(data)
+        # Convert data into PyTorch tensors
+        data = torch.FloatTensor(data)
+        return scaler, data
+
+    def normalize(self,data):
+        scaler = StandardScaler().fit(data)
+        data_mean = scaler.mean_.tolist()
+        data_std = scaler.scale_.tolist()
+        data = scaler.transform(data)
+        # Convert data into PyTorch tensors
+        data = torch.FloatTensor(data)
+        return scaler, data, data_mean, data_std
 
     def __getitem__(self, index):
         # Returns one sample at a time
-        #batch: num of data_previous + num of data_after
-        batch_num = self.data_previous + self.data_after 
+        # One sample: (input_channels, num, width*height)
+        ### Betch: (batch_size, input_channels, num, width*height)
 
-        # in_la_data: (batch, data_type, height , width)
-        in_la_data = self.data_matrix[index:index+batch_num]
+        nx = self.width
+        ny = self.height
+        ny_range = self.data_range[0]
+        nx_range = self.data_range[1]
+        data_type_num = self.data_type_num
+        batch_num = self.data_previous + self.data_after #batch: num of data_previous + num of data_after
+        input_data_list = np.zeros((batch_num, data_type_num,ny*nx))
+
+        # Read all data
+        # input_data_list: (batch, data_type, height * width)
+        for i in range(index,index+batch_num):
+            data = np.loadtxt(self.data_path_list[i],skiprows=2)
+            x_site = data[:nx*ny,0]
+            y_site = data[:nx*ny,1]
+            for j in range(data_type_num):
+                input_data_list[i-index, j] = data[:nx*ny,j+2]
+        
+        # Reshape data: (ny * nx) -> (ny, nx)
+        x_site_matrix = x_site.reshape(ny, nx)
+        y_site_matrix = y_site.reshape(ny, nx)
+
+        # data_matrix: (batch, data_type, height, width)
+        data_matrix = np.zeros((batch_num, data_type_num, ny, nx))
+        for j in range(data_type_num):
+            input_data_list[:,j] = self.scaler_list[j].transform(input_data_list[:,j])
+            for i in range(batch_num):
+                matrix = input_data_list[i, j]
+                # Reshape data: (ny * nx) -> (ny, nx)
+                data_matrix[i, j] = matrix.reshape(ny, nx)
         
         # Convert Data into PyTorch tensors
-        in_la_data = torch.Tensor(in_la_data)            #(batch, data_type, height, width)
+        self.x_site_matrix = torch.Tensor(x_site_matrix) #(height, width)
+        self.y_site_matrix = torch.Tensor(y_site_matrix) #(height, width)
+        self.data_matrix = torch.Tensor(data_matrix)     #(batch, data_type, height, width)
 
-        inputs = in_la_data[:self.data_previous]          #(data_previous, data_type, height, width)
-        labels = in_la_data[self.data_previous:]          #(data_after, data_type, height, width)
-        return inputs, labels
+        self.x_site_matrix = self.x_site_matrix[ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        self.y_site_matrix = self.y_site_matrix[ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+
+        input = self.data_matrix[:self.data_previous]            #(data_previous, data_type, height, width)
+        label = self.data_matrix[self.data_previous:batch_num]   #(data_after, data_type, height, width)
+        input_out = input[:,self.data_select,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]] #(data_after, data_select, height, width)
+        label_out = label[:,self.data_select,ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]] #(data_after, data_select, height, width)
+
+
+        return input_out, label_out
 
     def __len__(self):
         # Returns the size of the dataset

@@ -52,7 +52,6 @@ class modeltrain():
         data_record,model = self.train_model(train_dataloader, valid_dataloader,model_path)
         
         if self.rank == 0:
-            self.plot_learning_curve(data_record, model_path, 300,title='CFD-Conv model')
             self.test_model(model, model_path,test_dataset,data_scaler_list)
         if self.args.dist:
             dist.barrier()
@@ -159,6 +158,8 @@ class modeltrain():
                                 f'data_record.json')
                 save_json(data_record,json_file_path)
                 print_rank_0(f'Save the data_record of {epoch+1} epochs')
+                if self.rank == 0:
+                    self.plot_learning_curve(data_record, model_path, 300,title='CFD-Conv model')
             
             print_rank_0(f"\n")
             if early_stop_cnt > self.args.early_stop:
@@ -275,7 +276,7 @@ class modeltrain():
             mae[i] = mean_absolute_error(labels[i], pred[i])
             mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
             max_re[i] = np.max(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
-            ssim[i] = structural_similarity(labels[i],pred[i])
+            ssim[i] = structural_similarity(labels[i],pred[i],data_range=labels[i].max() - labels[i].min())
 
             print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MSE: {mse[i]:.5e}")
             print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} RMSE: {rmse[i]:.5e}")

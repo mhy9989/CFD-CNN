@@ -1,6 +1,7 @@
 {
     "seed": 2023,
-    "data_path": "../flow2d-t-1001",
+    "data_path": "./CFD_data.npy",
+    "coordinate_path": "./CFD_coord.npy",
     "data_num": 1001,
     "data_type": ["u","v","T","P"],
     "data_select": [0,1,2,3],
@@ -43,7 +44,7 @@
     "max_epoch": 1000,
     "early_stop": 100,
     "lr": 0.001,
-    "lossfun": "MSE",
+    "lossfun": "MAE",
     "optim": "Adam",
     "print_ds_output": false,
     "modelname": "CFD_Conv1001_5to1",
