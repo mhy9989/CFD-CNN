@@ -73,15 +73,9 @@ class modeltrain():
         else:
             print_rank_0(f"num {num} out of data range")
             return
-        model, _, _, _ = deepspeed.initialize(
-            args=self.args,
-            config = self.ds_config,
-            model=self.net, 
-            optimizer = self.optimizer, 
-            )
         #Training
         if self.rank == 0:
-            self.test_model(model, model_path,test_dataset,data_scaler_list,dir_name = f"pic_{num}")
+            self.test_model(model_path,test_dataset,data_scaler_list,dir_name = f"pic_{num}")
         if self.args.dist:
             dist.barrier()
 
