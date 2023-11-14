@@ -112,6 +112,12 @@ class modeltrain():
             lr_scheduler = self.scheduler
             )
         print_rank_0(f"device of model is: {model.device}")
+        if self.args.lf_load:
+            checkpoint_path = os.path.join(model_path, 'checkpoint',
+                                f'model_{n_epochs}.pt')
+            state_dict = torch.load(checkpoint_path)
+            model.state_dict(state_dict)
+            print(f"Successful load model state_dict")
         for epoch in range(0,n_epochs):
             if self.args.dist:
                 train_dataloader.sampler.set_epoch(epoch)
