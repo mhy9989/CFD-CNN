@@ -49,10 +49,10 @@ class modeltrain():
         train_dataloader, valid_dataloader, test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
             = get_datloader(self.args)
         #Training
-        data_record,model = self.train_model(train_dataloader, valid_dataloader,model_path)
+        self.train_model(train_dataloader, valid_dataloader,model_path)
         
         if self.rank == 0:
-            self.test_model(model, model_path,test_dataset,data_scaler_list)
+            self.test_model(model_path,test_dataset,data_scaler_list)
         if self.args.dist:
             dist.barrier()
 
@@ -102,22 +102,23 @@ class modeltrain():
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
         self.scheduler = optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=self.args.lr, steps_per_epoch=self.args.steps_per_epoch, epochs=n_epochs)
         parameters = filter(lambda p: p.requires_grad, self.net.parameters())
+        model = self.net
+        if self.args.lf_load:
+            checkpoint_path = os.path.join(model_path, 'checkpoint',
+                                f'model_{n_epochs}.pt')
+            state_dict = torch.load(checkpoint_path, map_location=self.args.device)
+            model.load_state_dict(state_dict)
+            print(f"Successful load model state_dict")
         # Deepspeed initialize
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
             args=self.args,
             config = self.ds_config,
-            model=self.net, 
+            model=model, 
             optimizer = self.optimizer, 
             model_parameters=parameters,
             lr_scheduler = self.scheduler
             )
         print_rank_0(f"device of model is: {model.device}")
-        if self.args.lf_load:
-            checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model_{n_epochs}.pt')
-            state_dict = torch.load(checkpoint_path)
-            model.state_dict(state_dict)
-            print(f"Successful load model state_dict")
         for epoch in range(0,n_epochs):
             if self.args.dist:
                 train_dataloader.sampler.set_epoch(epoch)
@@ -151,7 +152,7 @@ class modeltrain():
                 if self.rank == 0:
                     checkpoint_path = os.path.join(model_path, 'checkpoint',
                                     f'model_{n_epochs}.pt')
-                    save_dict = model.state_dict()
+                    save_dict = model.module.state_dict()
                     torch.save(save_dict, checkpoint_path)
                     print_rank_0(f'[{epoch + 1:03d}/{n_epochs:03d}] Saving model with loss {best_loss:.5e}')
                 if dist.is_initialized():
@@ -175,7 +176,7 @@ class modeltrain():
         print_rank_0(f'Best loss is: {best_loss:.5e}')
         print_rank_0(f'Best loss epoch is: {best_epoch}')
         print_rank_0(f'\n')
-        return data_record,model
+        return 
     
     def _predict(self, inputs, model):
         """Forward the model"""
@@ -240,16 +241,19 @@ class modeltrain():
                 valid_loss.append(loss.detach().cpu().item())
         return np.mean(valid_loss)
 
-    def test_model(self, model, model_path,test_dataset,data_scaler_list,dir_name = "pic"):
+    def test_model(self, model_path,test_dataset,data_scaler_list,dir_name = "pic"):
         n_epochs = self.args.max_epoch
+        device = self.args.device
+        model = self.net
         checkpoint_path = os.path.join(model_path, 'checkpoint',
                                 f'model_{n_epochs}.pt')
-        model.load_state_dict(torch.load(checkpoint_path))
-        print_rank_0(f"Successful load checkpoint!")
+        state_dict = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(state_dict)
+        print(f"Successful load model state_dict")
+        
+        model.to(self.args.device)
         data_select_num = self.args.data_select_num
         model.eval()
-        device = model.device
-        
         with torch.no_grad():
             inputs, labels = test_dataset
             inputs = inputs.unsqueeze(0).to(device)
