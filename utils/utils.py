@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
 import torch.distributed as dist
-
+from collections import OrderedDict
 import json
 from easydict import EasyDict as edict
 
@@ -15,6 +15,22 @@ def print_rank_0(message):
     else:
         print(message, flush=True)
 
+def weights_to_cpu(state_dict: OrderedDict) -> OrderedDict:
+    """Copy a model state_dict to cpu.
+
+    Args:
+        state_dict (OrderedDict): Model weights on GPU.
+
+    Returns:
+        OrderedDict: Model weights on GPU.
+    """
+    state_dict_cpu = OrderedDict()
+    for key, val in state_dict.items():
+        state_dict_cpu[key] = val.cpu()
+    # Keep metadata in state_dict
+    state_dict_cpu._metadata = getattr(  # type: ignore
+        state_dict, '_metadata', OrderedDict())
+    return state_dict_cpu
 
 def save_json(data,data_path):
     """Save json data

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import torch.distributed as dist
 import deepspeed
-from utils.utils import print_rank_0, json2Parser, get_all_reduce_mean, save_json
+from utils.utils import *
 from DataDefine import get_datloader
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from skimage.metrics import structural_similarity
@@ -96,22 +96,21 @@ class modeltrain():
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
         self.scheduler = optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=self.args.lr, steps_per_epoch=self.args.steps_per_epoch, epochs=n_epochs)
         parameters = filter(lambda p: p.requires_grad, self.net.parameters())
-        model = self.net
-        if self.args.lf_load:
-            checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model_{n_epochs}.pt')
-            state_dict = torch.load(checkpoint_path, map_location=self.args.device)
-            model.load_state_dict(state_dict)
-            print(f"Successful load model state_dict")
         # Deepspeed initialize
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
             args=self.args,
             config = self.ds_config,
-            model=model, 
+            model=self.net, 
             optimizer = self.optimizer, 
             model_parameters=parameters,
             lr_scheduler = self.scheduler
             )
+        if self.args.lf_load:
+            checkpoint_path = os.path.join(model_path, 'checkpoint',
+                                f'model_{n_epochs}.pt')
+            state_dict = torch.load(checkpoint_path)
+            model.module.load_state_dict(state_dict)
+            print(f"Successful load model state_dict")
         print_rank_0(f"device of model is: {model.device}")
         for epoch in range(0,n_epochs):
             if self.args.dist:
@@ -146,7 +145,7 @@ class modeltrain():
                 if self.rank == 0:
                     checkpoint_path = os.path.join(model_path, 'checkpoint',
                                     f'model_{n_epochs}.pt')
-                    save_dict = model.module.state_dict()
+                    save_dict = weights_to_cpu(model.module.state_dict())
                     torch.save(save_dict, checkpoint_path)
                     print_rank_0(f'[{epoch + 1:03d}/{n_epochs:03d}] Saving model with loss {best_loss:.5e}')
                 if dist.is_initialized():
