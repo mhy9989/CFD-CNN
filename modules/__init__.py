@@ -1,5 +1,3 @@
-# Copyright (c) CAIRI AI Lab. All rights reserved
-
 from .convlstm_modules import ConvLSTMCell
 from .crevnet_modules import zig_rev_predictor, autoencoder
 from .e3dlstm_modules import Eidetic3DLSTMCell, tf_Conv3d

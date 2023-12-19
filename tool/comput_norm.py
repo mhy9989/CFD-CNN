@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import torch
 import numpy as np
-import json
 import os
 from utils.utils import json2Parser, save_json
 

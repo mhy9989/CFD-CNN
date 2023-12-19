@@ -1,345 +1,343 @@
-# -*- coding: utf-8 -*-
+# Copyright (c) CAIRI AI Lab. All rights reserved
 import os
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import torch
-from torch import optim
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import figure
-import torch.distributed as dist
-import deepspeed
-from utils.utils import *
-from DataDefine import get_datloader
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from skimage.metrics import structural_similarity
-from torchsummary import summary
-from rich.progress import track
-matplotlib.use('AGG')
+import os.path as osp
 import time
+import numpy as np
+from typing import Dict, List
+from fvcore.nn import FlopCountAnalysis, flop_count_table
+from DataDefine import get_datloader
+import torch
 
-class modeltrain():
+from core import metric,Recorder
+from methods import method_maps
+from utils import (plot_test_figure, check_dir,
+                   weights_to_cpu, print_rank_0, measure_throughput,
+                   output_namespace)
 
-    def __init__(self,model_data):
 
-        (self.args,
-         self.ds_config,
-         self.net,
-         self.optimizer,
-         self.criterion
-        ) = model_data
-        self.rank = self.args.global_rank
-        pass
+class modeltrain(object):
+    """The basic class of PyTorch training and evaluation."""
 
-    def summary_model(self,input_size,device):
-        if self.rank == 0:
-            model = self.net.to(device)
-            summary(model, input_size,0,device)
+    def __init__(self, model_data, model_path, mode = "train", test_num = -1):
+        """Initialize experiments (non-dist as an example)"""
+        self.model_data = model_data
+        self.args = model_data[0]
+        self.device = self.args.device
+        self.method = None
+        self.args.method = self.args.method.lower()
+        self.epoch = 0
+        self.max_epochs = self.args.max_epoch
+        self.steps_per_epoch = self.args.steps_per_epoch
+        self.rank = self.args.rank
+        self.world_size = self.args.world_size
+        self.dist = self.args.dist
+        self.early_stop = self.args.early_stop_epoch
+        self.model_path = model_path
+        self.best_loss = 100.
+        self.test_num = test_num
 
-    def train_CFD(self,model_path):
-        r"""Train the DeepCK net. The Loss will be saved as .png.
+        if mode == "train":
+            self.preparation()
+            print_rank_0(output_namespace(self.args))
+            if self.args.if_display_method_info:
+                self.display_method_info()
+        elif mode == "test":
+            self.preparation_test()
 
-        Parameters
-        ----------
-        model_path : str
-            The path of the model.
 
-        """
-        #Make Dataset
-        train_dataloader, valid_dataloader, test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
-            = get_datloader(self.args)
-        #Training
-        self.train_model(train_dataloader, valid_dataloader,model_path)
+    def preparation_test(self):
+        """Preparation of basic experiment setups"""
+        self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
+        # build the method
+        self.build_method()
+        # prepare data
+        self.get_test_data()
         
-        if self.rank == 0:
-            self.test_model(model_path,test_dataset,data_scaler_list)
-        if self.args.dist:
-            dist.barrier()
 
-    def test_CFD(self,model_path,num):
-        r"""test the DeepCK net. The Loss will be saved as .png.
+    def preparation(self):
+        """Preparation of basic experiment setups"""
+        if self.early_stop <= self.max_epochs // 5:
+            self.early_stop = self.max_epochs * 2
 
-        Parameters
-        ----------
-        model_path : str
-            The path of the model.
+        self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
+        # build the method
+        self.build_method()
+        # load checkpoint
+        if self.args.load_from:
+            if self.args.load_from == True:
+                self.args.load_from = 'latest'
+            self.load(name=self.args.load_from)
+        # prepare data
+        self.get_data()
 
-        """
-        #Make Dataset
+
+    def build_method(self):
+        self.method = method_maps[self.args.method.lower()](self.model_data)
+        self.method.model.eval()
+        # setup ddp training
+        self.method.init_distributed()
+        print_rank_0("\n")
+
+
+    def get_data(self):
+        """Prepare datasets and dataloaders"""
+        (self.train_loader, 
+         self.vali_loader, 
+         self.test_loader, 
+         self.scaler_list, 
+         self.x_site_matrix, 
+         self.y_site_matrix) = get_datloader(self.args)
+        self.method.scaler_list = self.scaler_list
+        if self.vali_loader is None:
+            self.vali_loader = self.test_loader
+    
+    def get_test_data(self):
+        """Prepare datasets and dataloaders"""
         custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
-        if int(num) < (custom_length):
-            test_dataset, data_scaler_list, self.x_site_matrix, self.y_site_matrix \
-                = get_datloader(self.args, "test", num)
+        if abs(self.test_num) < (custom_length):
+            (self.test_loader, 
+            self.scaler_list, 
+            self.x_site_matrix, 
+            self.y_site_matrix) = get_datloader(self.args, "test", self.test_num)
+            self.method.scaler_list = self.scaler_list
         else:
-            print_rank_0(f"num {num} out of data range")
+            print_rank_0(f"num {self.test_num} out of data range")
             return
-        #Training
-        if self.rank == 0:
-            self.test_model(model_path,test_dataset,data_scaler_list,dir_name = f"pic_{num}")
-        if self.args.dist:
-            dist.barrier()
 
 
-    def train_model(self, train_dataloader, valid_dataloader, model_path):
-        ''' Model training '''
-        n_epochs = self.args.max_epoch
-        # For recording training loss
-        data_record = {
-                "train_loss" : [],
-                "valid_loss" : []
+    def save(self, name=''):
+        """Saving models and meta data to checkpoints"""
+        checkpoint = {
+            'epoch': self.epoch + 1,
+            'optimizer': self.method.optimizer.state_dict(),
+            'state_dict': weights_to_cpu(self.method.model.state_dict()) \
+                if not self.dist else weights_to_cpu(self.method.model.module.state_dict()),
+            'scheduler': self.method.scheduler.state_dict()
             }
-        best_loss = 10.
-        best_epoch = 0
-        early_stop_cnt = 0
+        torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
+        del checkpoint
 
-        # Scheduler can be customized
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.3, patience=20)
-        self.scheduler = optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=self.args.lr, steps_per_epoch=self.args.steps_per_epoch, epochs=n_epochs)
-        parameters = filter(lambda p: p.requires_grad, self.net.parameters())
-        # Deepspeed initialize
-        model, optimizer, _, lr_scheduler = deepspeed.initialize(
-            args=self.args,
-            config = self.ds_config,
-            model=self.net, 
-            optimizer = self.optimizer, 
-            model_parameters=parameters,
-            lr_scheduler = self.scheduler
-            )
-        if self.args.lf_load:
-            checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model_{n_epochs}.pt')
-            state_dict = torch.load(checkpoint_path)
-            model.module.load_state_dict(state_dict)
-            print(f"Successful load model state_dict")
-        print_rank_0(f"device of model is: {model.device}")
-        for epoch in range(0,n_epochs):
-            if self.args.dist:
-                train_dataloader.sampler.set_epoch(epoch)
-            tic = time.time()
-            # ---------- Training ----------
-            print_rank_0(f"lr = {optimizer.state_dict()['param_groups'][0]['lr']}")
-            train_loss = self.train_epoch(model,train_dataloader,self.criterion)
-            #print_rank_0(optimizer.state_dict()['param_groups'][0]['lr'])
-            data_record["train_loss"].append(train_loss) 
-            print_rank_0(f'[ Train | {epoch + 1:03d}/{n_epochs:03d} ] loss = {train_loss:.5e}')
-            
-            # ---------- Validation ----------
+        # client_state = {}
+        # client_state['epoch'] = self.epoch + 1
+        # self.method.model.save_checkpoint(self.checkpoints_path, name, client_state = client_state,  save_latest=False)
+
+
+    def load(self, name=''):
+        """Loading models from the checkpoint"""
+        filename = osp.join(self.checkpoints_path, f'{name}.pth')
+        try:
+            checkpoint = torch.load(filename, map_location='cpu')
+        except:
+            return
+        # OrderedDict is a subclass of dict
+        if not isinstance(checkpoint, dict):
+            raise RuntimeError(f'No state_dict found in checkpoint file {filename}')
+        self.load_from_state_dict(checkpoint['state_dict'])
+        if checkpoint.get('epoch', None) is not None:
+            self.epoch = checkpoint['epoch']
+            self.method.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.method.scheduler.load_state_dict(checkpoint['scheduler'])
+            cur_lr = self.method.current_lr()
+            cur_lr = sum(cur_lr) / len(cur_lr)
+            print_rank_0(f"Successful optimizer state_dict, Lr: {cur_lr:.5e}")
+        del checkpoint
+        # load_path, client_state = self.method.model.load_checkpoint(self.checkpoints_path, name)
+        # self.epoch = client_state['epoch']
+        # print(f'successfully loaded checkpoint from {load_path}')
+
+
+    def load_from_state_dict(self, state_dict):
+        if self.dist:
+            try:
+                self.method.model.module.load_state_dict(state_dict)
+            except:
+                self.method.model.load_state_dict(state_dict)
+        else:
+            self.method.model.load_state_dict(state_dict)
+        print_rank_0(f"Successful load model state_dict")
+
+    def display_method_info(self):
+        """Plot the basic infomation of supported methods"""
+        T, C, H, W = self.args.in_shape
+        if self.args.method in ['simvp', 'tau']:
+            input_dummy = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
+        elif self.args.method == 'crevnet':
+            # crevnet must use the batchsize rather than 1
+            input_dummy = torch.ones(self.args.batch_size, 20, C, H, W).to(self.device)
+        elif self.args.method == 'phydnet':
+            _tmp_input1 = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
+            _tmp_input2 = torch.ones(1, self.args.data_after, C, H, W).to(self.device)
+            _tmp_constraints = torch.zeros((49, 7, 7)).to(self.device)
+            input_dummy = (_tmp_input1, _tmp_input2, _tmp_constraints)
+        # elif self.args.method in ['convlstm', 'predrnnpp', 'predrnn', 'mim', 'e3dlstm', 'mau']:
+        #     Hp, Wp = H // self.args.patch_size, W // self.args.patch_size
+        #     Cp = self.args.patch_size ** 2 * C
+        #     _tmp_input = torch.ones(1, self.args.total_length, Hp, Wp, Cp).to(self.device)
+        #     _tmp_flag = torch.ones(1, self.args.data_after - 1, Hp, Wp, Cp).to(self.device)
+        #     input_dummy = (_tmp_input, _tmp_flag)
+        # elif self.args.method == 'predrnnv2':
+        #     Hp, Wp = H // self.args.patch_size, W // self.args.patch_size
+        #     Cp = self.args.patch_size ** 2 * C
+        #     _tmp_input = torch.ones(1, self.args.total_length, Hp, Wp, Cp).to(self.device)
+        #     _tmp_flag = torch.ones(1, self.args.total_length - 2, Hp, Wp, Cp).to(self.device)
+        #     input_dummy = (_tmp_input, _tmp_flag)
+        elif self.args.method == 'dmvfn':
+            input_dummy = torch.ones(1, 3, C, H, W, requires_grad=True).to(self.device)
+        elif self.args.method == 'prednet':
+           input_dummy = torch.ones(1, 1, C, H, W, requires_grad=True).to(self.device)
+        else:
+            raise ValueError(f'Invalid method name {self.args.method}')
+
+        dash_line = '-' * 80 + '\n'
+        info = self.method.model.__repr__()
+        flops = FlopCountAnalysis(self.method.model, input_dummy)
+        flops = flop_count_table(flops)
+        if self.args.fps:
+            fps = measure_throughput(self.method.model, input_dummy)
+            fps = 'Throughputs of {}: {:.3f}\n'.format(self.args.method, fps)
+        else:
+            fps = ''
+        print_rank_0('Model info:\n' + info+'\n' + flops+'\n' + fps + dash_line)
+
+    def train(self):
+        """Training loops of STL methods"""
+        recorder = Recorder(verbose=True, early_stop_time=min(self.max_epochs // 10, 30), 
+                            rank = self.rank, dist=self.dist, max_epochs = self.max_epochs)
+        num_updates = self.epoch * self.steps_per_epoch
+        vali_loss = False
+        early_stop = False
+        eta = 1.0  # PredRNN variants
+        for epoch in range(self.epoch, self.max_epochs):
+            print_rank_0("\n")
+            if self.args.empty_cache:
+                torch.cuda.empty_cache()
+
+            if self.dist and hasattr(self.train_loader.sampler, 'set_epoch'):
+                self.train_loader.sampler.set_epoch(epoch)
+
+            num_updates, loss_mean, eta = self.method.train_one_epoch(self.train_loader,
+                                                                      epoch, num_updates, eta)
+
+            self.epoch = epoch
             if self.args.valid_ratio != 0:
-                valid_loss = self.validate(model,valid_dataloader,self.criterion)
-                data_record["valid_loss"].append(valid_loss) 
-                print_rank_0(f'[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5e}')
-           
-            # ---------- Comput time ----------
-            data_time = time.time() - tic
-            print_rank_0(f"data_time = {data_time:.4f}s")
+                with torch.no_grad():
+                    vali_loss = self.vali()
             
-            # ---------- Check Loss ----------
-            if self.args.valid_ratio != 0:
-                new_loss = valid_loss
-            else:
-                new_loss = train_loss
-            if new_loss < best_loss:
-                best_loss = new_loss 
-                best_epoch = epoch + 1
-                early_stop_cnt = 0
-                if self.rank == 0:
-                    checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                    f'model_{n_epochs}.pt')
-                    save_dict = weights_to_cpu(model.module.state_dict())
-                    torch.save(save_dict, checkpoint_path)
-                    print_rank_0(f'[{epoch + 1:03d}/{n_epochs:03d}] Saving model with loss {best_loss:.5e}')
-                if dist.is_initialized():
-                    dist.barrier()
-            else:
-                early_stop_cnt += 1
-            
-            if (epoch +1)% 50 == 0 or (epoch +1) == n_epochs:
-                json_file_path = os.path.join(model_path, 'checkpoint',
-                                f'data_record.json')
-                save_json(data_record,json_file_path)
-                print_rank_0(f'Save the data_record of {epoch+1} epochs')
-                if self.rank == 0:
-                    self.plot_learning_curve(data_record, model_path, 300,title='CFD-Conv model')
-            
-            print_rank_0(f"\n")
-            if early_stop_cnt > self.args.early_stop:
+            cur_lr = self.method.current_lr()
+            cur_lr = sum(cur_lr) / len(cur_lr)
+            print_rank_0('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}\n'.format(
+                        epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
+
+            early_stop = recorder(loss_mean.avg, vali_loss, self.method.model, self.model_path, epoch)
+            self.best_loss = recorder.val_loss_min
+
+            if self.rank == 0:
+                self.save(name='latest')
+
+            if epoch > self.early_stop and early_stop:  # early stop training
+                print_rank_0('Early stop training at f{} epoch'.format(epoch))
                 break
 
-        print_rank_0(f'Finished training after {epoch+1} epochs')
-        print_rank_0(f'Best loss is: {best_loss:.5e}')
-        print_rank_0(f'Best loss epoch is: {best_epoch}')
-        print_rank_0(f'\n')
-        return 
+        if not check_dir(self.model_path):  # exit training when work_dir is removed
+            assert False and "Exit training because work_dir is removed"
+        print_rank_0("\n")
+        time.sleep(1)
+
+    def vali(self):
+        """A validation loop during training"""
+        results, eval_log = self.method.vali_one_epoch(self.vali_loader)
+
+        print_rank_0('\nval_metrics\t'+eval_log)
+
+        return results['loss'].mean()
+
+    def test(self):
+        """A testing loop of STL methods"""
+        best_model_path = osp.join(self.checkpoints_path, 'checkpoint.pth')
+        self.load_from_state_dict(torch.load(best_model_path))
+        
+        results = self.method.test_one_epoch(self.test_loader)
+        
+        channel_names = self.args.data_use
+        metric_list = self.method.metric_list
+
+        # Computed
+        eval_res_o, eval_log_o = metric(results['preds'], results['trues'],
+                                    metrics=metric_list, channel_names=channel_names, mode = "Computed")
+        results['metrics'] = np.array([eval_res_o['mae'], eval_res_o['mse'], eval_res_o['mre']])
+        print_rank_0(f"\n{eval_log_o}")
+        self.plot_test(results['trues'], results['preds'], "Computed")
+
+        if self.rank == 0:
+            folder_path = osp.join(self.model_path, 'saved', "Computed")
+            check_dir(folder_path)
+
+            for np_data in ['metrics', 'inputs', 'trues', 'preds']:
+                np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
+
+        # Original
+        results_n = self.de_norm(results)
+        eval_res, eval_log = metric(results['preds'], results['trues'],
+                                    self.scaler_list,
+                                    metrics=metric_list, channel_names=channel_names, mode = "Original")
+        results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
+        print_rank_0(f"\n{eval_log}")
+        self.plot_test(results_n['trues'], results_n['preds'], "Original")
+
+        if self.rank == 0:
+            folder_path = osp.join(self.model_path, 'saved', "Original")
+            check_dir(folder_path)
+
+            for np_data in ['metrics', 'inputs', 'trues', 'preds']:
+                np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
+
+        return eval_res_o, eval_res
+
+    def inference(self):
+        """A inference loop of STL methods"""
+        best_model_path = osp.join(self.model_path, 'checkpoint.pth')
+        self.load_from_state_dict(torch.load(best_model_path))
+
+        results = self.method.test_one_epoch(self, self.test_loader)
+
+        if self.rank == 0:
+            folder_path = osp.join(self.model_path, 'saved')
+            check_dir(folder_path)
+            for np_data in ['inputs', 'trues', 'preds']:
+                np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
+
+        return None
     
-    def _predict(self, inputs, model):
-        """Forward the model"""
-        if self.args.data_after == self.args.data_previous:
-            pred_y = model(inputs)
-        elif self.args.data_after < self.args.data_previous:
-            pred_y = model(inputs)
-            pred_y = pred_y[:, :self.args.data_after]
-        elif self.args.data_after > self.args.data_previous:
-            pred_y = []
-            d = self.args.data_after // self.args.data_previous
-            m = self.args.data_after % self.args.data_previous
-            
-            cur_seq = inputs.clone()
-            for _ in range(d):
-                cur_seq = model(cur_seq)
-                pred_y.append(cur_seq)
-
-            if m != 0:
-                cur_seq = model(cur_seq)
-                pred_y.append(cur_seq[:, :m])
-            
-            pred_y = torch.cat(pred_y, dim=1)
-        return pred_y
-
-    def train_epoch(self,model,trainloader,criterion):
-        """Train the model with train_loader."""
-        model.train()
-        train_loss = []
-        device = model.device
-        train_pbar = track(trainloader, description="Training...") if self.rank == 0 and not self.args.dist else trainloader
-        for inputs, labels in train_pbar:
-            # print_rank_0(f"shape of input: {inputs.shape}")
-            # print_rank_0(f"shape of labels: {labels.shape}")
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            pred = self._predict(inputs, model)
-            loss = criterion(pred, labels)
-            model.backward(loss)
-            model.step()
-            if self.args.dist:
-                loss = get_all_reduce_mean(loss)
-            train_loss.append(loss.detach().cpu().item())
-        return np.mean(train_loss)
-
-
-    def validate(self,model,validloader,criterion):
-        # ---------- Validation ----------
-        model.eval()
-        valid_loss = []
-        device = model.device
-        # Iterate the validation set by batches.
-        valid_pbar = track(validloader, description="Validing...") if self.rank == 0 and not self.args.dist else validloader
-        with torch.no_grad():
-            for inputs, labels in valid_pbar:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-                pred = self._predict(inputs, model)
-                loss = criterion(pred, labels)
-                if self.args.dist:
-                    loss = get_all_reduce_mean(loss)
-                valid_loss.append(loss.detach().cpu().item())
-        return np.mean(valid_loss)
-
-    def test_model(self, model_path,test_dataset,data_scaler_list,dir_name = "pic"):
-        n_epochs = self.args.max_epoch
-        device = self.args.device
-        model = self.net
-        checkpoint_path = os.path.join(model_path, 'checkpoint',
-                                f'model_{n_epochs}.pt')
-        state_dict = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(state_dict)
-        print(f"Successful load model state_dict")
-        
-        model.to(self.args.device)
+    def plot_test(self, tures, preds, mode, dpi = 300, dir_name = "pic"):
+        B, T, C, H, W = tures.shape
+        if B != 1 or T != 1:
+            raise ValueError("B and T must is 1")
+        tures = tures.reshape(C, H, W)
+        preds = preds.reshape(C, H, W)
         data_select_num = self.args.data_select_num
-        model.eval()
-        with torch.no_grad():
-            inputs, labels = test_dataset
-            inputs = inputs.unsqueeze(0).to(device)
-            labels = labels.unsqueeze(0).to(device)
-            pred = model(inputs)
-        labels = labels[0,0].cpu().numpy()
-        pred = pred[0,0].cpu().numpy()
-        mode = "Computed"
-        self.comput_test(labels, pred, mode,model_path, dir_name)
-
+        pic_folder = osp.join(self.model_path, dir_name, mode)
+        check_dir(pic_folder)
         for i in range(data_select_num):
-            labels[i] = data_scaler_list[self.args.data_select[i]].inverse_transform(labels[i])
-            pred[i] = data_scaler_list[self.args.data_select[i]].inverse_transform(pred[i])
-        mode = "Original"
-        self.comput_test(labels, pred, mode, model_path, dir_name)
-
-    def comput_test(self, labels, pred,mode, model_path, dir_name = "pic"):
-        data_select_num = self.args.data_select_num
-        mse = [0 for _ in range(data_select_num)]
-        rmse = [0 for _ in range(data_select_num)]
-        mae = [0 for _ in range(data_select_num)]
-        mre = [0 for _ in range(data_select_num)]
-        ssim = [0 for _ in range(data_select_num)]
-        max_re = [0 for _ in range(data_select_num)]
-        
-
-        for i in range(data_select_num):
-            mse[i] = mean_squared_error(labels[i], pred[i])
-            rmse[i] = np.sqrt(mse[i])
-            mae[i] = mean_absolute_error(labels[i], pred[i])
-            mre[i] = np.mean(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
-            max_re[i] = np.max(np.abs(labels[i] - pred[i]) / (np.abs(labels[i]) + 1e-10))
-            ssim[i] = structural_similarity(labels[i],pred[i],data_range=labels[i].max() - labels[i].min())
-
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MSE: {mse[i]:.5e}")
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} RMSE: {rmse[i]:.5e}")
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MAE: {mae[i]:.5e}")
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MRE: {mre[i]:.5e}")
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} SSIM: {ssim[i]:.5e}")
-            print_rank_0(f"{mode} {self.args.data_type[self.args.data_select[i]]} MAX_RE: {max_re[i]:.5e}")
-
-        self.plot_test(labels,pred,300,model_path,mode, dir_name)
-        print_rank_0(f"\n")
-
-    def plot_test(self, labels,pred,dpi,model_path,mode, dir_name = "pic"):
-        data_select_num = self.args.data_select_num
-        pic_folder = os.path.join(model_path, dir_name, mode)
-        os.makedirs(pic_folder, exist_ok=True)
-        for i in range(data_select_num):
-            min_max = [labels[i].min(), labels[i].max()]
-            self.plot_test_figure(min_max, labels[i], self.args.data_type[self.args.data_select[i]], "label", mode, pic_folder, dpi)
-            self.plot_test_figure(min_max, pred[i], self.args.data_type[self.args.data_select[i]], "pred", mode, pic_folder, dpi)
-
-            min_max = [(labels[i]-pred[i]).min(), (labels[i]-pred[i]).max()]
-            self.plot_test_figure(min_max, labels[i]-pred[i], self.args.data_type[self.args.data_select[i]], "delt", mode, pic_folder, dpi)
-
-    def plot_test_figure(self, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
-        cmap = 'RdBu_r'
-        levels = np.linspace(min_max[0], min_max[1], 600)
-        map = plt.contourf(self.x_site_matrix, self.y_site_matrix, data,levels,cmap=cmap) 
-        pic_name = f'{data_select}_{mode}_{data_name}.png'
-        ax = plt.gca()
-        ax.set_aspect(1) 
-        plt.colorbar(map,fraction=0.02, pad=0.03,
-                     ticks=np.linspace(min_max[0], min_max[1], 5),
-                     format = '%.1e')
-        plt.title(f"{mode} {data_name} data of type {data_select}")
-        plt.xlabel('x axis')
-        plt.ylabel('y axis')
-        pic_path = os.path.join(pic_folder, pic_name)
-        plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
-        print_rank_0(f'{data_name} picture saved in {pic_path}')
-        plt.close()
-
-    def plot_learning_curve(self,loss_record, model_path,dpi=300, title='', dir_name = "pic"):
-        ''' Plot learning curve of your DNN (train & valid loss) '''
-        total_steps = len(loss_record['train_loss'])
-        x_1 = range(total_steps)
-        if self.args.valid_ratio != 0:
-            x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
-            plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
-        plt.semilogy(x_1, loss_record['train_loss'], c='tab:red', label='train')
-        plt.xlabel('Training steps')
-        plt.ylabel('MSE loss')
-        plt.title('Learning curve of {}'.format(title))
-        plt.legend()
-
-        pic_name = f'data_record.png'
-        pic_folder = os.path.join(model_path, dir_name)
-        os.makedirs(pic_folder, exist_ok=True)
-        pic_path = os.path.join(pic_folder, pic_name)
-        print_rank_0(f'Simulation picture saved in {pic_path}')
-        plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
-        plt.close()
-
-
+            min_max = [tures[i].min(), tures[i].max()]
+            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, tures[i], 
+                             self.args.data_use[i], "label", mode, pic_folder, dpi)
+            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, preds[i], 
+                             self.args.data_use[i], "pred", mode, pic_folder, dpi)
+            min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
+            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, tures[i]-preds[i], 
+                             self.args.data_use[i], "delt", mode, pic_folder, dpi)
+        return None
+    
+    def de_norm(self, results):
+        results_ori = {}
+        for name in results.keys():
+            if name in ['inputs', 'trues', 'preds']:
+                B, T, C, H, W = results[name].shape
+                results_ori[name] = np.zeros((B, T, C, H, W))
+                for b in range(B):
+                    for t in range(T):
+                        for c in range(C):
+                            results_ori[name][b, t, c] = self.scaler_list[c].inverse_transform(results[name][b, t, c])
+            else:
+                results_ori[name] = results[name]
+        return results_ori

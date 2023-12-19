@@ -1,141 +1,125 @@
 # -*- coding: utf-8 -*-
 import os
-import numpy as np
 from modeldefine import *
 import torch
-from torch import nn,optim
-import torch.backends.cudnn as cudnn
-import random
 import torch.distributed as dist
 import deepspeed
 import math
-from utils.utils import print_rank_0, json2Parser
-from utils.ds_utils import *
-from models import *
+from utils.utils import print_rank_0, json2Parser, init_random_seed, set_seed, get_dist_info
+from utils.ds_utils import get_train_ds_config
+from core.optim_scheduler import get_optim_scheduler
+import core.lossfun as lossfun
+from utils.parser import default_parser
+from models import model_maps
+
 from easydict import EasyDict as edict
 
-def Initialize(args):
+def initialize(args):
     """Initialize training environment.
-    distributed by DeepSpeed.
-    support both slurm and mpi or DeepSpeed to Initialize.
+       distributed by DeepSpeed.
+       support both slurm and mpi or DeepSpeed to Initialize.
     """
-    cudnn.enabled = True   # If use DCU, make it False 
-    if args.seed is not None:
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        cudnn.deterministic = True
-        cudnn.benchmark = False
-        torch.manual_seed(args.seed)
-        torch.cuda.manual_seed_all(args.seed)
-
     if args.local_rank == -1:
         if torch.cuda.is_available():
             args.device = torch.device("cuda:0")
+            print_rank_0(f'Use non-distributed mode with GPU: {args.device}')
         else:
             args.device = torch.device("cpu")
-        args.global_rank = 0
+            print_rank_0(f'Use CPU')
+        args.rank = 0
         args.world_size = 1
         args.dist = False
     else:
         torch.cuda.set_device(args.local_rank)
         args.device = torch.device("cuda", args.local_rank)
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        #torch.distributed.init_process_group(backend='nccl')
         deepspeed.init_distributed()
-        args.global_rank = dist.get_rank()
-        args.world_size = dist.get_world_size()
+        args.rank, args.world_size = get_dist_info()
         args.dist = True
-
+        print_rank_0(f'Use distributed mode with GPUs, world_size: {args.world_size}')
+    
+    if args.dist:
+        seed = init_random_seed(args.seed)
+        seed = seed + dist.get_rank() if args.diff_seed else seed
+    else:
+        seed = args.seed
+    set_seed(seed)
     return args
 
+
 class modelbuild():
-    def __init__(self) -> None:
-        pass
+    def __init__(self, model_path, ds_args):
+        self.set_config(model_path, ds_args)
+        self.build_model(self.args)
+        self.init_optimizer(self.args)
+        self.init_lossfun(self.args)
 
-    def buildModel(self, args):
+
+    def get_data(self):
+        return self.args, self.ds_config, self.net, self.optimizer, self.scheduler, self.base_criterion
+
+
+    def build_model(self, args):
         """Create a neural network."""
-        act_funs = {
-            'Relu': nn.ReLU(),
-            'Gelu': nn.GELU(),
-            'Tanh': nn.Tanh(),
-            'LeakyReLU' : nn.LeakyReLU(),
-            'Sigmoid': nn.Sigmoid()
-        }
-        net = {
-            'CFD_ConLSTM': CFD_ConLSTM,
-            "SimVP_Model": SimVP_Model,
-        }
-        if args.net_type == 'CFD_ConLSTM':
-            self.net = net[args.net_type](act_funs[args.actfun],args.data_out_shape,args.device)
-        else:
-            model_config = edict(args.model_config)
-            model_config.in_shape = args.data_previous, \
-                                    args.data_select_num, \
-                                    args.data_height, \
-                                    args.data_width
-            self.net = net[args.net_type](**model_config)
-        print_rank_0(f"The neural network is created. Network type: {args.net_type}")
+        model_config = edict(args.model_config)
+        model_config.in_shape = args.data_previous, args.data_select_num, \
+                                args.data_height, args.data_width
+        self.args.in_shape = model_config.in_shape
+        net = model_maps[args.method.lower()]
+        self.net = net(**model_config).to(args.device)
+        print_rank_0(f"The neural network is created. Network type: {args.method.lower()}")
 
-    def setModel(self, args):
-        """Set the neural network."""
-        optim_hparas = {
-            'lr': args.lr,
-        }
-        self.optimizer= getattr(optim, args.optim)(
-        self.net.parameters(), **optim_hparas)
+
+    def init_optimizer(self, args):
+        """Create optimizer and scheduler."""
+        (self.optimizer, self.scheduler, self.args.by_epoch) \
+            = get_optim_scheduler(args, args.max_epoch, self.net, args.steps_per_epoch)
         print_rank_0(f"The optimizer is created. Optimizer type: {args.optim}")
-        # Setup Lossfun
-        loss_funs = {
-            'MAE':nn.L1Loss(),
-            'MSE':nn.MSELoss(),
-            'SmoothL1Loss':nn.SmoothL1Loss(),
-            'CEL': nn.CrossEntropyLoss(),
-            'Log': nn.LogSoftmax()
-        }
-        self.criterion=loss_funs[args.lossfun]
-        print_rank_0(f"The criterion is created. criterion type: {args.lossfun}")
+        print_rank_0(f"The scheduler is created. Scheduler type: {args.sched}")
+    
 
-    def loadsetting(self, model_path,ds_args):
-        """Load setting and build model"""
-        setting_path = os.path.join(model_path, 'checkpoint', f'settings.json')
+    def init_lossfun(self, args):
+        """Setup base lossfun"""
+        self.base_criterion = getattr(lossfun, args.lossfun)
+        print_rank_0(f"The base criterion is created. Base criterion type: {args.lossfun}")
+
+
+    def set_config(self, model_path, ds_args):
+        """Setup config"""
+        # read config
+        print_rank_0("\n")
+        setting_path = os.path.join(model_path, 'checkpoints', f'settings.json')
         args = json2Parser(setting_path)
+        default_values = default_parser()
+        for attribute in default_values.keys():
+            for key in default_values[attribute].keys():
+                if key not in args[attribute].keys():
+                    args[attribute][key] = default_values[attribute][key]
+        
+        for key in list(args.keys()):
+            args.update(args[key])
+
+        args.total_length = args.data_previous + args.data_after
         args.data_type_num = len(args.data_type)
         args.data_select_num = len(args.data_select)
         args.local_rank = ds_args.local_rank
-        args.data_shape = [args.data_type_num,
-                            args.data_height,
-                            args.data_width]
-        args.data_out_shape = [args.data_select_num,
+        args.data_shape = [args.data_type_num, args.data_height, args.data_width]
+        args.out_shape = [args.data_select_num,
                             args.data_range[0][1]-args.data_range[0][0],
-                            args.data_range[1][1]-args.data_range[1][0]
-                          ]
-        args = Initialize(args)
+                            args.data_range[1][1]-args.data_range[1][0]]
+        args.data_use = [args.data_type[i] for i in args.data_select]
+        
+        args = initialize(args)
+        args.batch_size = args.per_device_train_batch_size * args.world_size
         trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after))
         args.steps_per_epoch = math.ceil(trainlen/args.world_size/args.per_device_train_batch_size)
+
         if args.print_ds_output:
             steps_per_print = args.steps_per_epoch
         else:
-            steps_per_print = args.max_epoch * args.steps_per_epoch +1
+            steps_per_print = args.max_epoch * args.steps_per_epoch + 1
 
-        ds_config = get_train_ds_config(offload=ds_args.offload, 
-                                        stage=ds_args.zero_stage,
-                                        steps_per_print=steps_per_print)
-        
-        ds_config['train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
-        
-        ds_config['train_batch_size'] = \
-            args.per_device_train_batch_size * \
-            args.world_size * \
-            args.gradient_accumulation_steps
-
-
-        if args.dist:
-            dist.barrier()
-        self.buildModel(args)
-        self.setModel(args)
+        ds_config = get_train_ds_config(args, steps_per_print)
         self.args=args
         self.ds_config = ds_config
-
-        return (self.args,self.ds_config,self.net,self.optimizer,self.criterion)
-
 

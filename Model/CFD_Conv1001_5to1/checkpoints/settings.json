@@ -2,30 +2,30 @@
   "setup_config":{
     "seed": 2023,
     "diff_seed": false,
-    "per_device_train_batch_size": 2,
+    "per_device_train_batch_size": 4,
     "per_device_valid_batch_size": 1,
     "gradient_accumulation_steps": 1,
     "num_workers": 1,
-    "method": "SimVP_Model",
-    "max_epoch": 1000,
+    "method": "Tau",
+    "max_epoch": 200,
     "lossfun": "MSE",
     "load_from": false,
     "if_display_method_info": false,
-    "print_ds_output": true,
+    "print_ds_output": false,
     "empty_cache": true,
-    "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MAX_RE"]
+    "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MXRE"]
   },
   "data_config": {
-    "data_path": "./CFD_data.npy",
-    "coordinate_path": "./CFD_coord.npy",
+    "data_path": "../CFD-CNN/CFD_data.npy",
+    "coordinate_path": "../CFD-CNN/CFD_coord.npy",
     "data_num": 1001,
     "data_type": ["u", "v", "T", "P"],
-    "data_select": [0, 1, 2, 3],
+    "data_select": [2],
     "data_width": 1181,
     "data_height": 220,
     "data_range": [
-      [0, 208],
-      [0, 1168]
+      [0, 128],
+      [0, 256]
     ],
     "data_mean": [
       0.7160895679671404, 
@@ -51,7 +51,6 @@
     "lr": 0.001,
     "filter_bias_and_bn": false,
     "log_step": 1,
-    "opt": "adam",
     "opt_eps": null,
     "opt_betas": null,
     "momentum": 0.9,
@@ -69,13 +68,14 @@
     "final_div_factor": 1e4
   },
   "model_config": {
-    "model_type": "gSTA",
-    "hid_S": 128,
-    "hid_T": 1024,
-    "N_S": 8,
-    "N_T": 16,
+    "model_type": "tau",
+    "hid_S": 64,
+    "hid_T": 512,
+    "N_S": 4,
+    "N_T": 8,
     "spatio_kernel_enc": 3,
-    "spatio_kernel_dec": 3
+    "spatio_kernel_dec": 3,
+    "alpha": 0.1
   },
   "ds_config":{
     "offload": false,
