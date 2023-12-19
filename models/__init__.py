@@ -1,5 +1,3 @@
-# Copyright (c) CAIRI AI Lab. All rights reserved
-
 from .convlstm_model import ConvLSTM_Model
 from .crevnet_model import CrevNet_Model
 from .e3dlstm_model import E3DLSTM_Model

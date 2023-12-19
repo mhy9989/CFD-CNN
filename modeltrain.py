@@ -1,5 +1,3 @@
-# Copyright (c) CAIRI AI Lab. All rights reserved
-import os
 import os.path as osp
 import time
 import numpy as np
@@ -117,10 +115,6 @@ class modeltrain(object):
         torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
         del checkpoint
 
-        # client_state = {}
-        # client_state['epoch'] = self.epoch + 1
-        # self.method.model.save_checkpoint(self.checkpoints_path, name, client_state = client_state,  save_latest=False)
-
 
     def load(self, name=''):
         """Loading models from the checkpoint"""
@@ -141,9 +135,6 @@ class modeltrain(object):
             cur_lr = sum(cur_lr) / len(cur_lr)
             print_rank_0(f"Successful optimizer state_dict, Lr: {cur_lr:.5e}")
         del checkpoint
-        # load_path, client_state = self.method.model.load_checkpoint(self.checkpoints_path, name)
-        # self.epoch = client_state['epoch']
-        # print(f'successfully loaded checkpoint from {load_path}')
 
 
     def load_from_state_dict(self, state_dict):
@@ -200,7 +191,7 @@ class modeltrain(object):
         print_rank_0('Model info:\n' + info+'\n' + flops+'\n' + fps + dash_line)
 
     def train(self):
-        """Training loops of STL methods"""
+        """Training loops of methods"""
         recorder = Recorder(verbose=True, early_stop_time=min(self.max_epochs // 10, 30), 
                             rank = self.rank, dist=self.dist, max_epochs = self.max_epochs)
         num_updates = self.epoch * self.steps_per_epoch
@@ -252,7 +243,7 @@ class modeltrain(object):
         return results['loss'].mean()
 
     def test(self):
-        """A testing loop of STL methods"""
+        """A testing loop of methods"""
         best_model_path = osp.join(self.checkpoints_path, 'checkpoint.pth')
         self.load_from_state_dict(torch.load(best_model_path))
         
@@ -294,7 +285,7 @@ class modeltrain(object):
         return eval_res_o, eval_res
 
     def inference(self):
-        """A inference loop of STL methods"""
+        """A inference loop of methods"""
         best_model_path = osp.join(self.model_path, 'checkpoint.pth')
         self.load_from_state_dict(torch.load(best_model_path))
 
