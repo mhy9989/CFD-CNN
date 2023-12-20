@@ -58,12 +58,12 @@
     "early_stop_epoch": -1
   },
   "sched_config": {
-    "sched": "onecycle",
+    "sched": "step",
     "min_lr": 1e-6,
     "warmup_lr": 1e-5,
     "warmup_epoch": 0,
     "decay_rate": 0.1,
-    "decay_epoch": 100,
+    "decay_epoch": 50,
     "lr_k_decay": 1.0,
     "final_div_factor": 1e4
   },
