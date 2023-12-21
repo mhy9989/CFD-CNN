@@ -2,7 +2,7 @@
   "setup_config":{
     "seed": 2023,
     "diff_seed": false,
-    "per_device_train_batch_size": 4,
+    "per_device_train_batch_size": 2,
     "per_device_valid_batch_size": 1,
     "gradient_accumulation_steps": 1,
     "num_workers": 1,
@@ -11,14 +11,14 @@
     "lossfun": "MSE",
     "load_from": false,
     "if_display_method_info": false,
-    "print_ds_output": false,
+    "mem_log": true,
     "empty_cache": true,
     "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MXRE"]
   },
   "data_config": {
     "data_path": "../CFD-CNN/CFD_data.npy",
     "coordinate_path": "../CFD-CNN/CFD_coord.npy",
-    "data_num": 1001,
+    "data_num": 100,
     "data_type": ["u", "v", "T", "P"],
     "data_select": [2],
     "data_width": 1181,

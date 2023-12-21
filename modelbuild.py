@@ -5,7 +5,7 @@ import torch
 import torch.distributed as dist
 import deepspeed
 import math
-from utils.utils import print_rank_0, json2Parser, init_random_seed, set_seed, get_dist_info
+from utils.utils import print_log, json2Parser, init_random_seed, set_seed, get_dist_info
 from utils.ds_utils import get_train_ds_config
 from core.optim_scheduler import get_optim_scheduler
 import core.lossfun as lossfun
@@ -22,10 +22,10 @@ def initialize(args):
     if args.local_rank == -1:
         if torch.cuda.is_available():
             args.device = torch.device("cuda:0")
-            print_rank_0(f'Use non-distributed mode with GPU: {args.device}')
+            print_log(f'Use non-distributed mode with GPU: {args.device}')
         else:
             args.device = torch.device("cpu")
-            print_rank_0(f'Use CPU')
+            print_log(f'Use CPU')
         args.rank = 0
         args.world_size = 1
         args.dist = False
@@ -36,7 +36,7 @@ def initialize(args):
         deepspeed.init_distributed()
         args.rank, args.world_size = get_dist_info()
         args.dist = True
-        print_rank_0(f'Use distributed mode with GPUs, world_size: {args.world_size}')
+        print_log(f'Use distributed mode with GPUs, world_size: {args.world_size}')
     
     if args.dist:
         seed = init_random_seed(args.seed)
@@ -67,27 +67,26 @@ class modelbuild():
         self.args.in_shape = model_config.in_shape
         net = model_maps[args.method.lower()]
         self.net = net(**model_config).to(args.device)
-        print_rank_0(f"The neural network is created. Network type: {args.method.lower()}")
+        print_log(f"The neural network is created. Network type: {args.method.lower()}")
 
 
     def init_optimizer(self, args):
         """Create optimizer and scheduler."""
         (self.optimizer, self.scheduler, self.args.by_epoch) \
             = get_optim_scheduler(args, args.max_epoch, self.net, args.steps_per_epoch)
-        print_rank_0(f"The optimizer is created. Optimizer type: {args.optim}")
-        print_rank_0(f"The scheduler is created. Scheduler type: {args.sched}")
+        print_log(f"The optimizer is created. Optimizer type: {args.optim}")
+        print_log(f"The scheduler is created. Scheduler type: {args.sched}")
     
 
     def init_lossfun(self, args):
         """Setup base lossfun"""
         self.base_criterion = getattr(lossfun, args.lossfun)
-        print_rank_0(f"The base criterion is created. Base criterion type: {args.lossfun}")
+        print_log(f"The base criterion is created. Base criterion type: {args.lossfun}")
 
 
     def set_config(self, model_path, ds_args):
         """Setup config"""
         # read config
-        print_rank_0("\n")
         setting_path = os.path.join(model_path, 'checkpoints', f'settings.json')
         args = json2Parser(setting_path)
         default_values = default_parser()
@@ -113,13 +112,9 @@ class modelbuild():
         args.batch_size = args.per_device_train_batch_size * args.world_size
         trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after))
         args.steps_per_epoch = math.ceil(trainlen/args.world_size/args.per_device_train_batch_size)
+        ds_steps_per_print = args.max_epoch * args.steps_per_epoch + 1 # close ds step per print
 
-        if args.print_ds_output:
-            steps_per_print = args.steps_per_epoch
-        else:
-            steps_per_print = args.max_epoch * args.steps_per_epoch + 1
-
-        ds_config = get_train_ds_config(args, steps_per_print)
+        ds_config = get_train_ds_config(args, ds_steps_per_print)
         self.args=args
         self.ds_config = ds_config
 

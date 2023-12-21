@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from utils import print_rank_0, weights_to_cpu, save_json, plot_learning_curve
+from utils import print_log, weights_to_cpu, save_json, plot_learning_curve
 import os.path as osp
 
 
@@ -38,14 +38,14 @@ class Recorder:
         if (epoch +1)% 50 == 0 or (epoch +1) == self.max_epochs and self.rank == 0:
             json_file_path = osp.join(path,"checkpoints","loss_recoder.json")
             save_json(self.loss_recoder, json_file_path)
-            print_rank_0(f'Save the loss_recoder of {epoch+1} epochs')
+            print_log(f'Save the loss_recoder of {epoch+1} epochs')
             plot_learning_curve(self.loss_recoder, path, 300, title='CFD-Conv model')
 
         return self.decrease_time > self.early_stop_time 
     
     def save_checkpoint(self, val_loss, model, path):
         if self.verbose:
-            print_rank_0(f'Loss decreased ({self.val_loss_min:.5e} --> {val_loss:.5e}).  Saving best model ...')
+            print_log(f'Loss decreased ({self.val_loss_min:.5e} --> {val_loss:.5e}).  Saving best model ...')
         if self.rank == 0:
             torch.save(weights_to_cpu(model.state_dict()) \
                 if not self.dist else weights_to_cpu(model.module.state_dict()), osp.join(path, "checkpoints", "checkpoint.pth"))

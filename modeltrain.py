@@ -5,12 +5,12 @@ from typing import Dict, List
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 from DataDefine import get_datloader
 import torch
-
-from core import metric,Recorder
+import logging
+from deepspeed.accelerator import get_accelerator
+from core import metric, Recorder
 from methods import method_maps
-from utils import (plot_test_figure, check_dir,
-                   weights_to_cpu, print_rank_0, measure_throughput,
-                   output_namespace)
+from utils import (plot_test_figure, check_dir, print_log, print_rank_0,
+                   weights_to_cpu, measure_throughput, output_namespace)
 
 
 class modeltrain(object):
@@ -33,24 +33,14 @@ class modeltrain(object):
         self.model_path = model_path
         self.best_loss = 100.
         self.test_num = test_num
+        self.mode = mode
 
         if mode == "train":
             self.preparation()
-            print_rank_0(output_namespace(self.args))
+            print_log(output_namespace(self.args))
             if self.args.if_display_method_info:
                 self.display_method_info()
-        elif mode == "test":
-            self.preparation_test()
 
-
-    def preparation_test(self):
-        """Preparation of basic experiment setups"""
-        self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
-        # build the method
-        self.build_method()
-        # prepare data
-        self.get_test_data()
-        
 
     def preparation(self):
         """Preparation of basic experiment setups"""
@@ -58,10 +48,18 @@ class modeltrain(object):
             self.early_stop = self.max_epochs * 2
 
         self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
+        if self.rank == 0:
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+            timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+            prefix = 'train' if (self.mode == "train") else 'test'
+            logging.basicConfig(level=logging.INFO,
+                                filename=osp.join(self.model_path, '{}_{}.log'.format(prefix, timestamp)),
+                                filemode='a', format='%(asctime)s - %(message)s')
         # build the method
         self.build_method()
         # load checkpoint
-        if self.args.load_from:
+        if self.args.load_from and self.mode == "train":
             if self.args.load_from == True:
                 self.args.load_from = 'latest'
             self.load(name=self.args.load_from)
@@ -74,33 +72,31 @@ class modeltrain(object):
         self.method.model.eval()
         # setup ddp training
         self.method.init_distributed()
-        print_rank_0("\n")
 
 
     def get_data(self):
         """Prepare datasets and dataloaders"""
-        (self.train_loader, 
-         self.vali_loader, 
-         self.test_loader, 
-         self.scaler_list, 
-         self.x_site_matrix, 
-         self.y_site_matrix) = get_datloader(self.args)
-        self.method.scaler_list = self.scaler_list
-        if self.vali_loader is None:
-            self.vali_loader = self.test_loader
-    
-    def get_test_data(self):
-        """Prepare datasets and dataloaders"""
-        custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
-        if abs(self.test_num) < (custom_length):
-            (self.test_loader, 
+        if self.mode == "train":
+            (self.train_loader, 
+            self.vali_loader, 
+            self.test_loader, 
             self.scaler_list, 
             self.x_site_matrix, 
-            self.y_site_matrix) = get_datloader(self.args, "test", self.test_num)
+            self.y_site_matrix) = get_datloader(self.args)
             self.method.scaler_list = self.scaler_list
+            if self.vali_loader is None:
+                self.vali_loader = self.test_loader
         else:
-            print_rank_0(f"num {self.test_num} out of data range")
-            return
+            custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
+            if abs(self.test_num) < (custom_length):
+                (self.test_loader, 
+                self.scaler_list, 
+                self.x_site_matrix, 
+                self.y_site_matrix) = get_datloader(self.args, "test", self.test_num)
+                self.method.scaler_list = self.scaler_list
+            else:
+                print_log(f"num {self.test_num} out of data range")
+                raise ValueError
 
 
     def save(self, name=''):
@@ -133,7 +129,7 @@ class modeltrain(object):
             self.method.scheduler.load_state_dict(checkpoint['scheduler'])
             cur_lr = self.method.current_lr()
             cur_lr = sum(cur_lr) / len(cur_lr)
-            print_rank_0(f"Successful optimizer state_dict, Lr: {cur_lr:.5e}")
+            print_log(f"Successful optimizer state_dict, Lr: {cur_lr:.5e}")
         del checkpoint
 
 
@@ -145,7 +141,7 @@ class modeltrain(object):
                 self.method.model.load_state_dict(state_dict)
         else:
             self.method.model.load_state_dict(state_dict)
-        print_rank_0(f"Successful load model state_dict")
+        print_log(f"Successful load model state_dict")
 
     def display_method_info(self):
         """Plot the basic infomation of supported methods"""
@@ -188,7 +184,7 @@ class modeltrain(object):
             fps = 'Throughputs of {}: {:.3f}\n'.format(self.args.method, fps)
         else:
             fps = ''
-        print_rank_0('Model info:\n' + info+'\n' + flops+'\n' + fps + dash_line)
+        print_log('Model info:\n' + info+'\n' + flops+'\n' + fps + dash_line)
 
     def train(self):
         """Training loops of methods"""
@@ -199,7 +195,6 @@ class modeltrain(object):
         early_stop = False
         eta = 1.0  # PredRNN variants
         for epoch in range(self.epoch, self.max_epochs):
-            print_rank_0("\n")
             if self.args.empty_cache:
                 torch.cuda.empty_cache()
 
@@ -216,8 +211,13 @@ class modeltrain(object):
             
             cur_lr = self.method.current_lr()
             cur_lr = sum(cur_lr) / len(cur_lr)
-            print_rank_0('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}\n'.format(
+            print_log('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}'.format(
                         epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
+            
+            if self.args.mem_log:
+                MemAllocated = round(get_accelerator().memory_allocated() / 1024**3, 2)
+                MaxMemAllocated = round(get_accelerator().max_memory_allocated() / 1024**3, 2)
+                print_log(f"MemAllocated: {MemAllocated} GB, MaxMemAllocated: {MaxMemAllocated} GB")
 
             early_stop = recorder(loss_mean.avg, vali_loss, self.method.model, self.model_path, epoch)
             self.best_loss = recorder.val_loss_min
@@ -226,19 +226,18 @@ class modeltrain(object):
                 self.save(name='latest')
 
             if epoch > self.early_stop and early_stop:  # early stop training
-                print_rank_0('Early stop training at f{} epoch'.format(epoch))
+                print_log('Early stop training at f{} epoch'.format(epoch))
                 break
+            print_log("")
 
         if not check_dir(self.model_path):  # exit training when work_dir is removed
             assert False and "Exit training because work_dir is removed"
-        print_rank_0("\n")
         time.sleep(1)
 
     def vali(self):
         """A validation loop during training"""
         results, eval_log = self.method.vali_one_epoch(self.vali_loader)
-
-        print_rank_0('\nval_metrics\t'+eval_log)
+        print_log('Val_metrics\t'+eval_log)
 
         return results['loss'].mean()
 
@@ -256,7 +255,7 @@ class modeltrain(object):
         eval_res_o, eval_log_o = metric(results['preds'], results['trues'],
                                     metrics=metric_list, channel_names=channel_names, mode = "Computed")
         results['metrics'] = np.array([eval_res_o['mae'], eval_res_o['mse'], eval_res_o['mre']])
-        print_rank_0(f"\n{eval_log_o}")
+        print_log(f"{eval_log_o}")
         self.plot_test(results['trues'], results['preds'], "Computed")
 
         if self.rank == 0:
@@ -272,7 +271,7 @@ class modeltrain(object):
                                     self.scaler_list,
                                     metrics=metric_list, channel_names=channel_names, mode = "Original")
         results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
-        print_rank_0(f"\n{eval_log}")
+        print_log(f"{eval_log}")
         self.plot_test(results_n['trues'], results_n['preds'], "Original")
 
         if self.rank == 0:
