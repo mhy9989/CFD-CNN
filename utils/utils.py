@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from typing import Tuple
 import os
+import logging
 
 
 def print_rank_0(message):
@@ -18,6 +19,14 @@ def print_rank_0(message):
             print(message, flush=True)
     else:
         print(message, flush=True)
+
+def print_log(message):
+    print_rank_0(message)
+    if dist.is_initialized():
+        if dist.get_rank() == 0:
+            logging.info(message)
+    else:
+        logging.info(message)
 
 def weights_to_cpu(state_dict: OrderedDict) -> OrderedDict:
     """Copy a model state_dict to cpu.

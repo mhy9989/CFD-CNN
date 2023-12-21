@@ -2,12 +2,11 @@ import time
 import torch
 from timm.utils import AverageMeter
 
-from utils import reduce_tensor
+from utils import reduce_tensor, get_progress
 from .simvp import SimVP
 from rich.progress import track
 from core.lossfun import diff_div_reg
 from tqdm import tqdm
-
 
 class TAU(SimVP):
     r"""TAU
@@ -30,40 +29,45 @@ class TAU(SimVP):
         data_time_m = AverageMeter()
         losses_m = AverageMeter()
         self.model.train()
-        train_pbar = tqdm(train_loader) if self.rank == 0 else train_loader
-        #track(train_loader, description="Training...")
+        log_buffer = "Training..."
+        progress = get_progress()
+
         end = time.time()
-        for batch_x, batch_y in train_pbar:
-            data_time_m.update(time.time() - end)
-            if self.by_epoch:
-                self.optimizer.zero_grad()
-
-            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
-
-            pred_y = self.predict(batch_x)
-            loss = self.cal_loss(pred_y, batch_y)
-
-            if not self.dist:
-                losses_m.update(loss.item(), batch_x.size(0))
-
-            self.model.backward(loss)
-            if self.by_epoch:
-                self.optimizer.step()
-            else:
-                self.model.step()
-
-            torch.cuda.synchronize()
-            num_updates += 1
-
-            if self.dist:
-                losses_m.update(reduce_tensor(loss), batch_x.size(0))
-
+        with progress:
             if self.rank == 0:
-                log_buffer = 'train loss: {:.4e}'.format(loss.item())
-                log_buffer += ' | data time: {:.4e}'.format(data_time_m.avg)
-                train_pbar.set_description(log_buffer)
+                train_pbar = progress.add_task(description="Training...", total=len(train_loader))
+            
+            for batch_x, batch_y in train_loader:
+                data_time_m.update(time.time() - end)
+                if self.by_epoch:
+                    self.optimizer.zero_grad()
 
-            end = time.time()  # end for
+                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+
+                pred_y = self.predict(batch_x)
+                loss = self.cal_loss(pred_y, batch_y)
+
+                if not self.dist:
+                    losses_m.update(loss.item(), batch_x.size(0))
+
+                self.model.backward(loss)
+                if self.by_epoch:
+                    self.optimizer.step()
+                else:
+                    self.model.step()
+
+                torch.cuda.synchronize()
+                num_updates += 1
+
+                if self.dist:
+                    losses_m.update(reduce_tensor(loss), batch_x.size(0))
+
+                if self.rank == 0:
+                    log_buffer = 'train loss: {:.4e}'.format(loss.item())
+                    log_buffer += ' | data time: {:.4e}'.format(data_time_m.avg)
+                    progress.update(train_pbar, advance=1, description=f"{log_buffer}")
+
+                end = time.time()  # end for
         
         if self.by_epoch:
             self.scheduler.step(epoch)

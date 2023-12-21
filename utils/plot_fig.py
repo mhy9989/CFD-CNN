@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import print_rank_0
+from utils import print_log
 import os
 import os.path as osp
 
@@ -19,7 +19,7 @@ def plot_test_figure(x_site_matrix, y_site_matrix, min_max, data, data_select, d
     plt.ylabel('y axis')
     pic_path = osp.join(pic_folder, pic_name)
     plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
-    print_rank_0(f'{data_select}_{mode}_{data_name} picture is saved')
+    print_log(f'{data_select}_{mode}_{data_name} picture is saved')
     plt.close()
 
 def plot_learning_curve(loss_record, model_path, dpi=300, title='', dir_name = "pic"):
@@ -38,6 +38,6 @@ def plot_learning_curve(loss_record, model_path, dpi=300, title='', dir_name = "
     pic_folder = osp.join(model_path, dir_name)
     os.makedirs(pic_folder, exist_ok=True)
     pic_path =osp.join(pic_folder, pic_name)
-    print_rank_0(f'Simulation picture saved in {pic_path}')
+    print_log(f'Simulation picture saved in {pic_path}')
     plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
     plt.close()

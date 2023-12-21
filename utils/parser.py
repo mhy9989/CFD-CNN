@@ -5,15 +5,15 @@ def default_parser():
     "setup_config":{
         "seed": 2023,
         "diff_seed": False,
-        "per_device_train_batch_size": 2,
+        "per_device_train_batch_size": 1,
         "per_device_valid_batch_size": 1,
         "num_workers": 1,
         "method": "SimVP",
-        "max_epoch": 1000,
+        "max_epoch": 100,
         "lossfun": "MSE",
         "load_from": False,
         "if_display_method_info": False,
-        "print_ds_output": True,
+        "mem_log": True,
         "empty_cache": True,
         "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MAX_RE"]
     },

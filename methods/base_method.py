@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from core import metric
 import deepspeed
-from utils import gather_tensors_batch,  ProgressBar
+from utils import gather_tensors_batch, get_progress
 
 
 class Base_method(object):
@@ -73,7 +73,7 @@ class Base_method(object):
         """
         raise NotImplementedError
 
-    def dist_forward_collect(self, data_loader, length=None, gather_data=False):
+    def dist_forward_collect(self, data_loader, length=None, gather_data=False, mode = "Train"):
         """Forward and collect predictios in a distributed manner.
 
         Args:
@@ -87,33 +87,35 @@ class Base_method(object):
         # preparation
         results = []
         length = len(data_loader.dataset) if length is None else length
-        if self.rank == 0:
-            prog_bar = ProgressBar(len(data_loader))
+        progress = get_progress()
 
         # loop
-        for idx, (batch_x, batch_y) in enumerate(data_loader):
-            if idx == 0:
-                part_size = batch_x.shape[0]
-            with torch.no_grad():
-                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
-                pred_y = self.predict(batch_x, batch_y)
-
-            if gather_data:  # return raw datas
-                results.append(dict(zip(['inputs', 'preds', 'trues'],
-                                        [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
-            else:  # return metrics
-                eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
-                                     scaler_list = self.scaler_list,
-                                     metrics=self.metric_list, return_log=False)
-                eval_res['loss'] = self.cal_loss(pred_y, batch_y).cpu().numpy()
-                for k in eval_res.keys():
-                    eval_res[k] = eval_res[k].reshape(1)
-                results.append(eval_res)
-
-            if self.args.empty_cache:
-                torch.cuda.empty_cache()
+        with progress:
             if self.rank == 0:
-                prog_bar.update()
+                prog_bar = progress.add_task(description = mode, total=len(data_loader))
+            for idx, (batch_x, batch_y) in enumerate(data_loader):
+                if idx == 0:
+                    part_size = batch_x.shape[0]
+                with torch.no_grad():
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    pred_y = self.predict(batch_x, batch_y)
+
+                if gather_data:  # return raw datas
+                    results.append(dict(zip(['inputs', 'preds', 'trues'],
+                                            [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
+                else:  # return metrics
+                    eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
+                                        scaler_list = self.scaler_list,
+                                        metrics=self.metric_list, return_log=False)
+                    eval_res['loss'] = self.cal_loss(pred_y, batch_y).cpu().numpy()
+                    for k in eval_res.keys():
+                        eval_res[k] = eval_res[k].reshape(1)
+                    results.append(eval_res)
+
+                if self.args.empty_cache:
+                    torch.cuda.empty_cache()
+                if self.rank == 0:
+                    progress.update(prog_bar, advance=1)
 
         # post gather tensors
         results_all = {}
@@ -125,7 +127,7 @@ class Base_method(object):
             results_all[k] = results_strip
         return results_all
 
-    def nondist_forward_collect(self, data_loader, length=None, gather_data=False):
+    def nondist_forward_collect(self, data_loader, length=None, gather_data=False, mode = "Training..."):
         """Forward and collect predictios.
 
         Args:
@@ -138,29 +140,31 @@ class Base_method(object):
         """
         # preparation
         results = []
-        prog_bar = ProgressBar(len(data_loader))
         length = len(data_loader.dataset) if length is None else length
+        progress = get_progress()
         # loop
-        for idx, (batch_x, batch_y) in enumerate(data_loader):
-            with torch.no_grad():
-                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
-                pred_y = self.predict(batch_x, batch_y)
+        with progress:
+            prog_bar = progress.add_task(description = mode, total=len(data_loader))
+            for idx, (batch_x, batch_y) in enumerate(data_loader):
+                with torch.no_grad():
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    pred_y = self.predict(batch_x, batch_y)
 
-            if gather_data:  # return raw datas
-                results.append(dict(zip(['inputs', 'preds', 'trues'],
-                                        [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
-            else:  # return metrics
-                eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
-                                     scaler_list = self.scaler_list,
-                                     metrics=self.metric_list, return_log=False)
-                eval_res['loss'] = self.cal_loss(pred_y, batch_y).cpu().numpy()
-                for k in eval_res.keys():
-                    eval_res[k] = eval_res[k].reshape(1)
-                results.append(eval_res)
+                if gather_data:  # return raw datas
+                    results.append(dict(zip(['inputs', 'preds', 'trues'],
+                                            [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
+                else:  # return metrics
+                    eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
+                                        scaler_list = self.scaler_list,
+                                        metrics=self.metric_list, return_log=False)
+                    eval_res['loss'] = self.cal_loss(pred_y, batch_y).cpu().numpy()
+                    for k in eval_res.keys():
+                        eval_res[k] = eval_res[k].reshape(1)
+                    results.append(eval_res)
 
-            prog_bar.update()
-            if self.args.empty_cache:
-                torch.cuda.empty_cache()
+                progress.update(prog_bar, advance=1)
+                if self.args.empty_cache:
+                    torch.cuda.empty_cache()
 
         # post gather tensors
         results_all = {}
@@ -180,9 +184,9 @@ class Base_method(object):
         """
         self.model.eval()
         if self.dist and self.world_size > 1:
-            results = self.dist_forward_collect(vali_loader, len(vali_loader.dataset), gather_data=False)
+            results = self.dist_forward_collect(vali_loader, len(vali_loader.dataset), gather_data=False, mode="Validation...")
         else:
-            results = self.nondist_forward_collect(vali_loader, len(vali_loader.dataset), gather_data=False)
+            results = self.nondist_forward_collect(vali_loader, len(vali_loader.dataset), gather_data=False, mode="Validation...")
 
         eval_log = ""
         for k, v in results.items():
@@ -204,9 +208,9 @@ class Base_method(object):
         """
         self.model.eval()
         if self.dist and self.world_size > 1:
-            results = self.dist_forward_collect(test_loader, gather_data=True)
+            results = self.dist_forward_collect(test_loader, gather_data=True, mode="Testing...")
         else:
-            results = self.nondist_forward_collect(test_loader, gather_data=True)
+            results = self.nondist_forward_collect(test_loader, gather_data=True, mode="Testing...")
 
         return results
 

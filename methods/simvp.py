@@ -54,7 +54,7 @@ class SimVP(Base_method):
         data_time_m = AverageMeter()
         losses_m = AverageMeter()
         self.model.train()
-        train_pbar = tqdm(train_loader) if self.rank == 0 and not self.args.print_ds_output else train_loader
+        train_pbar = tqdm(train_loader) if self.rank == 0 else train_loader
 
         end = time.time()
         for batch_x, batch_y in train_pbar:
@@ -85,8 +85,7 @@ class SimVP(Base_method):
             if self.rank == 0:
                 log_buffer = 'train loss: {:.4e}'.format(loss.item())
                 log_buffer += ' | data time: {:.4e}'.format(data_time_m.avg)
-                if self.rank == 0 and not self.args.print_ds_output:
-                    train_pbar.set_description(log_buffer)
+                train_pbar.set_description(log_buffer)
 
             end = time.time()  # end for
         

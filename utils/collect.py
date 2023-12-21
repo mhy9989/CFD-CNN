@@ -6,7 +6,7 @@ import torch
 import torch.distributed as dist
 
 from .utils import get_dist_info
-from .progressbar import ProgressBar
+from .progressbar import get_progress
 
 
 def gather_tensors(input_array):
@@ -90,12 +90,14 @@ def nondist_forward_collect(func, data_loader, length, to_numpy=False):
         results_all (dict(np.ndarray)): The concatenated outputs.
     """
     results = []
-    prog_bar = ProgressBar(len(data_loader))
-    for i, data in enumerate(data_loader):
-        with torch.no_grad():
-            result = func(*data)  # list{tensor, ...}
-        results.append(result)
-        prog_bar.update()
+    progress = get_progress()
+    with progress:
+        prog_bar = progress.add_task(description = "", total=len(data_loader))
+        for i, data in enumerate(data_loader):
+            with torch.no_grad():
+                result = func(*data)  # list{tensor, ...}
+            results.append(result)
+            progress.update(prog_bar, advance=1)
 
     results_all = {}
     for k in results[0].keys():
@@ -129,15 +131,17 @@ def dist_forward_collect(func, data_loader, rank, length, ret_rank=-1, to_numpy=
     """
     assert to_numpy == True
     results = []
-    if rank == 0:
-        prog_bar = ProgressBar(len(data_loader))
-    for idx, data in enumerate(data_loader):
-        with torch.no_grad():
-            result = func(*data)  # list{tensor, ...}
-        results.append(result)
-
+    progress = get_progress()
+    with progress:
         if rank == 0:
-            prog_bar.update()
+            prog_bar = progress.add_task(description = "", total=len(data_loader))
+        for i, data in enumerate(data_loader):
+            with torch.no_grad():
+                result = func(*data)  # list{tensor, ...}
+            results.append(result)
+            if rank == 0:
+                progress.update(prog_bar, advance=1)
+
 
     results_all = {}
     for k in results[0].keys():

@@ -17,7 +17,7 @@ from timm.scheduler.step_lr import StepLRScheduler
 from timm.scheduler.tanh_lr import TanhLRScheduler
 
 from .optim_constant import optim_parameters
-from utils import print_rank_0
+from utils import print_log
 
 def get_parameter_groups(model, weight_decay=1e-5, skip_list=(), get_num_layer=None, get_layer_scale=None):
     parameter_group_names = {}
@@ -57,7 +57,7 @@ def get_parameter_groups(model, weight_decay=1e-5, skip_list=(), get_num_layer=N
 
         parameter_group_vars[group_name]["params"].append(param)
         parameter_group_names[group_name]["params"].append(name)
-    print_rank_0("Param groups = %s" % json.dumps(parameter_group_names, indent=2))
+    print_log("Param groups = %s" % json.dumps(parameter_group_names, indent=2))
     return list(parameter_group_vars.values())
 
 

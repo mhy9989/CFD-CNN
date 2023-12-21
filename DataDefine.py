@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from utils.utils import print_rank_0
+from utils.utils import print_log
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, random_split, Subset
 import warnings
@@ -13,7 +13,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     """Generate dataloader"""
     dataset = CFD_Dataset(args)
     data_scaler_list = [dataset.scaler_list[i] for i in args.data_select]
-    print_rank_0(f"\nLength of all dataset: {len(dataset)}")
+    print_log(f"Length of all dataset: {len(dataset)}")
     # Split dataset into training dataset, validation dataset and test_dataset
     # The last line of data is test data
     if mode == "test":
@@ -34,11 +34,11 @@ def get_datloader(args, mode = "train", test_num = 0):
     lengths = [trainlen, len(dataset) - trainlen]
     train_dataset, valid_dataset = random_split(dataset, lengths)
 
-    print_rank_0(f"Length of input dataset: {len(dataset)}")
-    print_rank_0(f"Length of train_dataset: {len(train_dataset)}")
-    print_rank_0(f"Length of valid_dataset: {len(valid_dataset)}")
-    print_rank_0(f"Shape of input_data: {test_dataset[0][0].shape}")
-    print_rank_0(f"Shape of label_data: {test_dataset[0][1].shape}\n")
+    print_log(f"Length of input dataset: {len(dataset)}")
+    print_log(f"Length of train_dataset: {len(train_dataset)}")
+    print_log(f"Length of valid_dataset: {len(valid_dataset)}")
+    print_log(f"Shape of input_data: {test_dataset[0][0].shape}")
+    print_log(f"Shape of label_data: {test_dataset[0][1].shape}")
 
     # DataLoaders creation:
     if not args.dist:
@@ -93,7 +93,7 @@ class CFD_Dataset(Dataset):
                 scaler.min_= custom_min - args.data_min[i] * scale
                 self.scaler_list.append(scaler)
         else:
-            print_rank_0(f"Error data_scaler type: {args.data_scaler}")
+            print_log(f"Error data_scaler type: {args.data_scaler}")
             raise EOFError
         
         site_matrix = np.load(args.coordinate_path)
