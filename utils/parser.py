@@ -15,7 +15,8 @@ def default_parser():
         "if_display_method_info": False,
         "mem_log": True,
         "empty_cache": True,
-        "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MAX_RE"]
+        "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MAX_RE"],
+        "fps": True
     },
     "data_config": {
         "data_path": "./CFD_data.npy",

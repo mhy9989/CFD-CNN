@@ -2,7 +2,7 @@
   "setup_config":{
     "seed": 2023,
     "diff_seed": false,
-    "per_device_train_batch_size": 2,
+    "per_device_train_batch_size": 4,
     "per_device_valid_batch_size": 1,
     "gradient_accumulation_steps": 1,
     "num_workers": 1,
@@ -13,7 +13,8 @@
     "if_display_method_info": false,
     "mem_log": true,
     "empty_cache": true,
-    "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MXRE"]
+    "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MXRE"],
+    "fps": true
   },
   "data_config": {
     "data_path": "../CFD-CNN/CFD_data.npy",
