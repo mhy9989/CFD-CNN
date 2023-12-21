@@ -62,9 +62,7 @@ class modelbuild():
     def build_model(self, args):
         """Create a neural network."""
         model_config = edict(args.model_config)
-        model_config.in_shape = args.data_previous, args.data_select_num, \
-                                args.data_height, args.data_width
-        self.args.in_shape = model_config.in_shape
+        model_config.in_shape = args.in_shape
         net = model_maps[args.method.lower()]
         self.net = net(**model_config).to(args.device)
         print_log(f"The neural network is created. Network type: {args.method.lower()}")
@@ -103,9 +101,12 @@ class modelbuild():
         args.data_select_num = len(args.data_select)
         args.local_rank = ds_args.local_rank
         args.data_shape = [args.data_type_num, args.data_height, args.data_width]
-        args.out_shape = [args.data_select_num,
-                            args.data_range[0][1]-args.data_range[0][0],
-                            args.data_range[1][1]-args.data_range[1][0]]
+        args.in_shape = [args.data_previous, args.data_select_num,
+                          args.data_range[0][1]-args.data_range[0][0],
+                          args.data_range[1][1]-args.data_range[1][0]]
+        args.out_shape = [args.data_after, args.data_select_num,
+                          args.data_range[0][1]-args.data_range[0][0],
+                          args.data_range[1][1]-args.data_range[1][0]]
         args.data_use = [args.data_type[i] for i in args.data_select]
         
         args = initialize(args)
