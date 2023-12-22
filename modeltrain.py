@@ -256,9 +256,9 @@ class modeltrain(object):
                                     metrics=metric_list, channel_names=channel_names, mode = "Computed")
         results['metrics'] = np.array([eval_res_o['mae'], eval_res_o['mse'], eval_res_o['mre']])
         print_log(f"{eval_log_o}")
-        self.plot_test(results['trues'], results['preds'], "Computed")
 
         if self.rank == 0:
+            self.plot_test(results['trues'], results['preds'], "Computed")
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
 
@@ -272,9 +272,9 @@ class modeltrain(object):
                                     metrics=metric_list, channel_names=channel_names, mode = "Original")
         results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
         print_log(f"{eval_log}")
-        self.plot_test(results_n['trues'], results_n['preds'], "Original")
 
         if self.rank == 0:
+            self.plot_test(results_n['trues'], results_n['preds'], "Original")
             folder_path = osp.join(self.model_path, 'saved', "Original")
             check_dir(folder_path)
 
