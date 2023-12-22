@@ -35,11 +35,10 @@ class modeltrain(object):
         self.test_num = test_num
         self.mode = mode
 
-        if mode == "train":
-            self.preparation()
-            print_log(output_namespace(self.args))
-            if self.args.if_display_method_info:
-                self.display_method_info()
+        self.preparation()
+        print_log(output_namespace(self.args))
+        if self.args.if_display_method_info:
+            self.display_method_info()
 
 
     def preparation(self):
