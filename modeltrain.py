@@ -274,7 +274,7 @@ class modeltrain(object):
         print_log(f"{eval_log}")
 
         if self.rank == 0:
-            self.plot_test(results_n['trues'], results_n['preds'], "Original")
+            self.plot_test(results_n['inputs'], results_n['trues'], results_n['preds'], "Original")
             folder_path = osp.join(self.model_path, 'saved', "Original")
             check_dir(folder_path)
 
