@@ -258,7 +258,7 @@ class modeltrain(object):
         print_log(f"{eval_log_o}")
 
         if self.rank == 0:
-            self.plot_test(results['trues'], results['preds'], "Computed")
+            self.plot_test(results['inputs'], results['trues'], results['preds'], "Computed")
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
 
@@ -298,16 +298,20 @@ class modeltrain(object):
 
         return None
     
-    def plot_test(self, tures, preds, mode, dpi = 300, dir_name = "pic"):
+    def plot_test(self, inputs, tures, preds, mode, dpi = 300, dir_name = "pic"):
         B, T, C, H, W = tures.shape
         if B != 1 or T != 1:
             raise ValueError("B and T must is 1")
+        inputs = inputs[0, -1]
         tures = tures.reshape(C, H, W)
         preds = preds.reshape(C, H, W)
         data_select_num = self.args.data_select_num
         pic_folder = osp.join(self.model_path, dir_name, mode)
         check_dir(pic_folder)
         for i in range(data_select_num):
+            min_max = [inputs[i].min(), inputs[i].max()]
+            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, inputs[i], 
+                             self.args.data_use[i], "inputs", mode, pic_folder, dpi)
             min_max = [tures[i].min(), tures[i].max()]
             plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, tures[i], 
                              self.args.data_use[i], "label", mode, pic_folder, dpi)

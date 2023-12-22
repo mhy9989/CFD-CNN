@@ -65,7 +65,7 @@ class TAU(SimVP):
                 if self.rank == 0:
                     log_buffer = 'train loss: {:.4e}'.format(loss.item())
                     log_buffer += ' | data time: {:.4e}'.format(data_time_m.avg)
-                    progress.update(train_pbar, advance=1, description=f"{log_buffer}")
+                    progress.update(train_pbar, advance=1)#, description=f"{log_buffer}")
 
                 end = time.time()  # end for
         
