@@ -51,13 +51,18 @@ def get_datloader(args, mode = "train", test_num = 0):
     train_loader = DataLoader(train_dataset,
                                 sampler=train_sampler,
                                 num_workers=args.num_workers,
+                                drop_last=True,
+                                pin_memory=True,
                                 batch_size=args.per_device_train_batch_size)
     vali_loader = DataLoader(valid_dataset,
                                 sampler=vaild_sampler,
                                 num_workers=args.num_workers,
+                                drop_last=False,
+                                pin_memory=True,
                                 batch_size=args.per_device_valid_batch_size)
     test_loader = DataLoader(test_dataset,
                                 num_workers=0,
+                                pin_memory=True,
                                 batch_size=len(test_dataset))
     return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
 
