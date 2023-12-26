@@ -82,6 +82,6 @@
     "offload": false,
     "zero_stage": 0,
     "gradient_accumulation_steps": 1,
-    "gradient_clipping": 1.0
+    "gradient_clipping": 2.0
 }
 }
