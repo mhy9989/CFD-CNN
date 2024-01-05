@@ -60,7 +60,7 @@ class SimVP(Base_method):
         end = time.time()
         with progress:
             if self.rank == 0:
-                train_pbar = progress.add_task(description="Training...", total=len(train_loader))
+                train_pbar = progress.add_task(description=log_buffer, total=len(train_loader))
             
             for batch_x, batch_y in train_loader:
                 data_time_m.update(time.time() - end)

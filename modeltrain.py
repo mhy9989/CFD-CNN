@@ -5,12 +5,11 @@ from typing import Dict, List
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 from DataDefine import get_datloader
 import torch
-import logging
 from deepspeed.accelerator import get_accelerator
 from core import metric, Recorder
 from methods import method_maps
-from utils import (plot_test_figure, check_dir, print_log, print_rank_0,
-                   weights_to_cpu, measure_throughput, output_namespace)
+from utils import (plot_test_figure, check_dir, print_log, weights_to_cpu,
+                   measure_throughput, output_namespace)
 
 
 class modeltrain(object):
@@ -47,14 +46,6 @@ class modeltrain(object):
             self.early_stop = self.max_epochs * 2
 
         self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
-        if self.rank == 0:
-            for handler in logging.root.handlers[:]:
-                logging.root.removeHandler(handler)
-            timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-            prefix = 'train' if (self.mode == "train") else 'test'
-            logging.basicConfig(level=logging.INFO,
-                                filename=osp.join(self.model_path, '{}_{}.log'.format(prefix, timestamp)),
-                                filemode='a', format='%(asctime)s - %(message)s')
         # build the method
         self.build_method()
         # load checkpoint
@@ -80,8 +71,10 @@ class modeltrain(object):
             self.vali_loader, 
             self.test_loader, 
             self.scaler_list, 
-            self.x_site_matrix, 
-            self.y_site_matrix) = get_datloader(self.args)
+            self.x_mesh, 
+            self.y_mesh,
+            self.jac) = get_datloader(self.args)
+            self.method.jac = torch.Tensor(self.jac).to(self.device)
             self.method.scaler_list = self.scaler_list
             if self.vali_loader is None:
                 self.vali_loader = self.test_loader
@@ -90,8 +83,8 @@ class modeltrain(object):
             if abs(self.test_num) < (custom_length):
                 (self.test_loader, 
                 self.scaler_list, 
-                self.x_site_matrix, 
-                self.y_site_matrix) = get_datloader(self.args, "test", self.test_num)
+                self.x_mesh, 
+                self.y_mesh) = get_datloader(self.args, "test", self.test_num)
                 self.method.scaler_list = self.scaler_list
             else:
                 print_log(f"num {self.test_num} out of data range")
@@ -250,6 +243,7 @@ class modeltrain(object):
         channel_names = self.args.data_use
         metric_list = self.method.metric_list
 
+        eval_res_o=""
         # Computed
         eval_res_o, eval_log_o = metric(results['preds'], results['trues'],
                                     metrics=metric_list, channel_names=channel_names, mode = "Computed")
@@ -264,21 +258,23 @@ class modeltrain(object):
             for np_data in ['metrics', 'inputs', 'trues', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
+        eval_res=""
         # Original
-        results_n = self.de_norm(results)
-        eval_res, eval_log = metric(results['preds'], results['trues'],
-                                    self.scaler_list,
-                                    metrics=metric_list, channel_names=channel_names, mode = "Original")
-        results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
-        print_log(f"{eval_log}")
+        if self.scaler_list:
+            results_n = self.de_norm(results)
+            eval_res, eval_log = metric(results['preds'], results['trues'],
+                                        self.scaler_list,
+                                        metrics=metric_list, channel_names=channel_names, mode = "Original")
+            results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
+            print_log(f"{eval_log}")
 
-        if self.rank == 0:
-            self.plot_test(results_n['inputs'], results_n['trues'], results_n['preds'], "Original")
-            folder_path = osp.join(self.model_path, 'saved', "Original")
-            check_dir(folder_path)
+            if self.rank == 0:
+                self.plot_test(results_n['inputs'], results_n['trues'], results_n['preds'], "Original")
+                folder_path = osp.join(self.model_path, 'saved', "Original")
+                check_dir(folder_path)
 
-            for np_data in ['metrics', 'inputs', 'trues', 'preds']:
-                np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
+                for np_data in ['metrics', 'inputs', 'trues', 'preds']:
+                    np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
 
         return eval_res_o, eval_res
 
@@ -309,22 +305,22 @@ class modeltrain(object):
         check_dir(pic_folder)
         for i in range(data_select_num):
             min_max = [inputs[i].min(), inputs[i].max()]
-            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, inputs[i], 
+            plot_test_figure(self.x_mesh, self.y_mesh, min_max, inputs[i], 
                              self.args.data_use[i], "inputs", mode, pic_folder, dpi)
             min_max = [tures[i].min(), tures[i].max()]
-            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, tures[i], 
+            plot_test_figure(self.x_mesh, self.y_mesh, min_max, tures[i], 
                              self.args.data_use[i], "label", mode, pic_folder, dpi)
-            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, preds[i], 
+            plot_test_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
                              self.args.data_use[i], "pred", mode, pic_folder, dpi)
             min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
-            plot_test_figure(self.x_site_matrix, self.y_site_matrix, min_max, tures[i]-preds[i], 
+            plot_test_figure(self.x_mesh, self.y_mesh, min_max, tures[i]-preds[i], 
                              self.args.data_use[i], "delt", mode, pic_folder, dpi)
         return None
     
     def de_norm(self, results):
         results_ori = {}
         for name in results.keys():
-            if name in ['inputs', 'trues', 'preds']:
+            if name in ['inputs', 'trues', 'preds'] and self.scaler_list:
                 B, T, C, H, W = results[name].shape
                 results_ori[name] = np.zeros((B, T, C, H, W))
                 for b in range(B):

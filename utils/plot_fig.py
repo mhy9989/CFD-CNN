@@ -6,10 +6,10 @@ from utils import print_log
 import os
 import os.path as osp
 
-def plot_test_figure(x_site_matrix, y_site_matrix, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
+def plot_test_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
     cmap = 'RdBu_r'
     levels = np.linspace(min_max[0], min_max[1], 600)
-    map = plt.contourf(x_site_matrix, y_site_matrix, data, levels,cmap=cmap) 
+    map = plt.contourf(x_mesh, y_mesh, data, levels,cmap=cmap) 
     pic_name = f'{data_select}_{mode}_{data_name}.png'
     ax = plt.gca()
     ax.set_aspect(1) 

@@ -8,6 +8,6 @@ from .recorder import Recorder
 __all__ = [
     'metric', 'get_optim_scheduler', 'optim_parameters',
     'relu', 'gelu', 'tanh', 'leakyrelu', 'sigmoid',
-    'MAE', 'MSE', 'SmoothL1Loss', 'CEL', 'Log', 'diff_div_reg',
-    'Recorder', 
+    'MAE', 'MSE', 'SmoothL1Loss', 'CEL', 'Log', 'diff_div_reg', 'GS', 'GS0',
+    'Recorder', 'Regularization'
 ]
