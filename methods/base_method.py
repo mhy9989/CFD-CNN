@@ -32,6 +32,7 @@ class Base_method(object):
         self.rank = self.args.rank
         self.world_size = self.args.world_size
         self.scaler_list = None
+        self.jac = None
 
         # setup metrics
         self.metric_list = [metric.lower() for metric in self.args.metrics]

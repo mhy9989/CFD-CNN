@@ -12,6 +12,7 @@ def default_parser():
         "max_epoch": 100,
         "lossfun": "MSE",
         "load_from": False,
+        "Regularization": 0,
         "if_display_method_info": False,
         "mem_log": True,
         "empty_cache": True,
@@ -20,7 +21,7 @@ def default_parser():
     },
     "data_config": {
         "data_path": "./CFD_data.npy",
-        "coordinate_path": "./CFD_coord.npy",
+        "mesh_path": "./CFD_mesh.npy",
         "data_num": 1001,
         "data_type": ["u", "v", "T", "P"],
         "data_select": [0, 1, 2, 3],

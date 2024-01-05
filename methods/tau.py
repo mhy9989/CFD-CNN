@@ -4,9 +4,7 @@ from timm.utils import AverageMeter
 
 from utils import reduce_tensor, get_progress
 from .simvp import SimVP
-from rich.progress import track
-from core.lossfun import diff_div_reg
-from tqdm import tqdm
+from core.lossfun import diff_div_reg, GS, Regularization, GS0
 
 class TAU(SimVP):
     r"""TAU
@@ -21,7 +19,10 @@ class TAU(SimVP):
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)
+        loss =  self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)# + 0.1 * GS(pred_y, batch_y, self.jac, mode = "CD4")
+        if self.args.regularization > 0:
+            reg_loss = self.reg(self.model)
+            loss += reg_loss
         return loss
     
     def train_one_epoch(self, train_loader, epoch, num_updates, eta=None, **kwargs):
@@ -31,11 +32,14 @@ class TAU(SimVP):
         self.model.train()
         log_buffer = "Training..."
         progress = get_progress()
+        
+        if self.args.regularization > 0:
+            self.reg=Regularization(self.model, self.args.regularization, p=2, dist=self.dist).to(self.device)
 
         end = time.time()
         with progress:
             if self.rank == 0:
-                train_pbar = progress.add_task(description="Training...", total=len(train_loader))
+                train_pbar = progress.add_task(description=log_buffer, total=len(train_loader))
             
             for batch_x, batch_y in train_loader:
                 data_time_m.update(time.time() - end)

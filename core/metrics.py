@@ -57,7 +57,7 @@ def metric(pred, true, scaler_list = None, metrics=['mae', 'mse', 'mre'],
     Returns:
         dict: evaluation results
     """
-    if scaler_list is not None:
+    if scaler_list :
         B, T, C, H, W = true.shape
         for b in range(B):
             for t in range(T):

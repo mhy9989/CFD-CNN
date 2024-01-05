@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from utils.utils import print_log
+from utils import print_log, jac
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, random_split, Subset
 import warnings
@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 def get_datloader(args, mode = "train", test_num = 0):
     """Generate dataloader"""
     dataset = CFD_Dataset(args)
-    data_scaler_list = [dataset.scaler_list[i] for i in args.data_select]
+    data_scaler_list = [dataset.scaler_list[i] for i in args.data_select] if dataset.scaler_list else None
     print_log(f"Length of all dataset: {len(dataset)}")
     # Split dataset into training dataset, validation dataset and test_dataset
     # The last line of data is test data
@@ -23,7 +23,7 @@ def get_datloader(args, mode = "train", test_num = 0):
         test_loader = DataLoader(test_dataset,
                                 num_workers=0,
                                 batch_size=len(test_dataset))
-        return test_loader, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+        return test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
     else:
         test_num = len(dataset) -1
         test_dataset = Subset(dataset, [test_num])
@@ -32,7 +32,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     dataset.custom_length -= 1
     trainlen = int((1 - args.valid_ratio) * len(dataset))
     lengths = [trainlen, len(dataset) - trainlen]
-    train_dataset, valid_dataset = random_split(dataset, lengths)
+    train_dataset, valid_dataset = random_split(dataset, lengths, generator=torch.Generator(device='cpu'))
 
     print_log(f"Length of input dataset: {len(dataset)}")
     print_log(f"Length of train_dataset: {len(train_dataset)}")
@@ -51,7 +51,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     train_loader = DataLoader(train_dataset,
                                 sampler=train_sampler,
                                 num_workers=args.num_workers,
-                                drop_last=True,
+                                drop_last=False,
                                 pin_memory=True,
                                 batch_size=args.per_device_train_batch_size)
     vali_loader = DataLoader(valid_dataset,
@@ -64,7 +64,7 @@ def get_datloader(args, mode = "train", test_num = 0):
                                 num_workers=0,
                                 pin_memory=True,
                                 batch_size=len(test_dataset))
-    return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_site_matrix, dataset.y_site_matrix
+    return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh, dataset.jac
 
 
 class CFD_Dataset(Dataset):
@@ -97,23 +97,32 @@ class CFD_Dataset(Dataset):
                 scaler.scale_ = scale
                 scaler.min_= custom_min - args.data_min[i] * scale
                 self.scaler_list.append(scaler)
+        elif not args.data_scaler:
+            self.scaler_list = None
         else:
             print_log(f"Error data_scaler type: {args.data_scaler}")
             raise EOFError
         
-        site_matrix = np.load(args.coordinate_path)
+        mesh = np.load(args.mesh_path)
         data_matrix = np.load(args.data_path)
         self.data_total_num = data_matrix.shape[0]
-        self.x_site_matrix = site_matrix[0][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
-        self.y_site_matrix = site_matrix[1][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        self.x_mesh = mesh[0][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
+        self.y_mesh = mesh[1][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
 
         # Reshape data: (num, data_type,  height, width) -> (num, data_type, height * width)
         data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num,-1)
-        for i in range(self.data_type_num):
-            data_matrix[:,i] = self.scaler_list[i].transform(data_matrix[:,i])
+        if self.scaler_list:
+            for i in range(self.data_type_num):
+                data_matrix[:,i] = self.scaler_list[i].transform(data_matrix[:,i])
         
         self.data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num, self.height, self.width)
         self.data_matrix = self.data_matrix[:, self.data_select, ny_range[0]:ny_range[1], nx_range[0]:nx_range[1]]
+        
+        # comput jac
+        self.jac = jac(self.x_mesh, self.y_mesh)
+
+        del mesh
+        del data_matrix
 
 
     def __getitem__(self, index):
