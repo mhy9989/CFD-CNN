@@ -32,7 +32,7 @@ def get_datloader(args, mode = "train", test_num = 0):
     dataset.custom_length -= 1
     trainlen = int((1 - args.valid_ratio) * len(dataset))
     lengths = [trainlen, len(dataset) - trainlen]
-    train_dataset, valid_dataset = random_split(dataset, lengths, generator=torch.Generator(device='cpu'))
+    train_dataset, valid_dataset = random_split(dataset, lengths)
 
     print_log(f"Length of input dataset: {len(dataset)}")
     print_log(f"Length of train_dataset: {len(train_dataset)}")

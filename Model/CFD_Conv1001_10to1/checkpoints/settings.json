@@ -3,14 +3,13 @@
     "seed": 2023,
     "diff_seed": false,
     "per_device_train_batch_size": 4,
-    "per_device_valid_batch_size": 2,
+    "per_device_valid_batch_size": 4,
     "gradient_accumulation_steps": 1,
     "num_workers": 12,
     "method": "TAU",
     "max_epoch": 500,
     "lossfun": "MSE",
-    "load_from": false,
-    "Regularization": 0,
+    "load_from": true,
     "if_display_method_info": false,
     "mem_log": true,
     "empty_cache": false,
@@ -18,8 +17,8 @@
     "fps": true
   },
   "data_config": {
-    "data_path": "../CFD-CNN/CFD_data.npy",
-    "mesh_path": "../CFD-CNN/CFD_mesh.npy",
+    "data_path": "../CFD-CNN-o/CFD_data.npy",
+    "mesh_path": "../CFD-CNN-o/CFD_mesh.npy",
     "data_num": 1001,
     "data_type": ["u", "v", "T", "P"],
     "data_select": [2],
@@ -43,7 +42,7 @@
     ],
     "data_max": [1.4213101, 1.08254902, 12.95459985, 78.43348863],
     "data_min": [-0.55474735, -0.68369049, 0.77961313, 0.24014292],
-    "data_scaler": "Standard",
+    "data_scaler": "MinMax",
     "data_previous": 10,
     "data_after": 1,
     "valid_ratio": 0.1
@@ -71,13 +70,13 @@
   },
   "model_config": {
     "model_type": "tau",
-    "hid_S": 64,
+    "hid_S": 32,
     "hid_T": 256,
     "N_S": 2,
     "N_T": 8,
     "spatio_kernel_enc": 3,
     "spatio_kernel_dec": 3,
-    "drop_path": 0.1,
+    "drop_path":0.1,
     "alpha": 0.1
   },
   "ds_config":{

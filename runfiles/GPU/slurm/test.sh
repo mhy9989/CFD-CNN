@@ -1,14 +1,17 @@
 #!/bin/bash
-#SBATCH -J DeePCK
-#SBATCH --gpus=1
-#SBATCH -o slurm-%j.log
-#SBATCH -e slurm-%j.log
+#DSUB -n DeePCK
+#DSUB -A root.bingxing2.gpuuser661
+#DSUB -q root.default
+#DSUB -l wuhanG5500
+#DSUB --job_type cosched
+#DSUB -R 'cpu=6;gpu=1;mem=150000'
+#DSUB -N 1
 
-module purge
-module load anaconda/2021.11
-source activate mhypy39
-module load compilers/cuda/12.1 compilers/gcc/11.3.0 cudnn/8.8.1.3_cuda12.x
-OUTPUT_LOG=train_script.log
+
+module load anaconda/2020.11
+#module load cuda/11.8 cudnn/8.8.1_cuda11.x
+source activate py38
+
+OUTPUT_LOG=train_"${BATCH_JOB_ID}".log
 
 script -q -f "${OUTPUT_LOG}" -c "deepspeed test.py"
-

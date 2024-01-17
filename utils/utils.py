@@ -3,6 +3,7 @@ import torch.distributed as dist
 from collections import OrderedDict
 import json
 from easydict import EasyDict as edict
+import torch.backends.cudnn as cudnn
 import random
 import numpy as np
 import torch
@@ -122,7 +123,7 @@ def init_random_seed(seed=None, device='cuda'):
     return random_num.item()
 
 
-def set_seed(seed, deterministic=False):
+def set_seed(seed, deterministic=True):
     """Set random seed.
 
     Args:
@@ -132,6 +133,7 @@ def set_seed(seed, deterministic=False):
             to True and `torch.backends.cudnn.benchmark` to False.
             Default: False.
     """
+    cudnn.enabled = True
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

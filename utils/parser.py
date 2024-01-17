@@ -12,7 +12,7 @@ def default_parser():
         "max_epoch": 100,
         "lossfun": "MSE",
         "load_from": False,
-        "Regularization": 0,
+        "regularization": 0.0,
         "if_display_method_info": False,
         "mem_log": True,
         "empty_cache": True,

@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 import torch.nn.functional as F
+from utils import print_log
 
 def CD2(y, h):
     yy = torch.zeros_like(y, device=y.device)
