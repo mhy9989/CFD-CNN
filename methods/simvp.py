@@ -4,9 +4,7 @@ from timm.utils import AverageMeter
 
 from utils import reduce_tensor, get_progress
 from .base_method import Base_method
-from rich.progress import track
-from tqdm import tqdm
-
+from core.lossfun import GS, Regularization, GS0
 
 class SimVP(Base_method):
     r"""SimVP
@@ -56,6 +54,9 @@ class SimVP(Base_method):
         self.model.train()
         log_buffer = "Training..."
         progress = get_progress()
+        
+        if self.args.regularization > 0:
+            self.reg=Regularization(self.model, self.args.regularization, p=2, dist=self.dist).to(self.device)
 
         end = time.time()
         with progress:
@@ -64,7 +65,7 @@ class SimVP(Base_method):
             
             for batch_x, batch_y in train_loader:
                 data_time_m.update(time.time() - end)
-                if self.by_epoch:
+                if self.by_epoch or not self.dist:
                     self.optimizer.zero_grad()
 
                 batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
@@ -73,10 +74,11 @@ class SimVP(Base_method):
                 loss = self.cal_loss(pred_y, batch_y)
 
                 if not self.dist:
-                    losses_m.update(loss.item(), batch_x.size(0))
+                    loss.backward()
+                else:
+                    self.model.backward(loss)
 
-                self.model.backward(loss)
-                if self.by_epoch:
+                if self.by_epoch or not self.dist:
                     self.optimizer.step()
                 else:
                     self.model.step()
@@ -86,6 +88,8 @@ class SimVP(Base_method):
 
                 if self.dist:
                     losses_m.update(reduce_tensor(loss), batch_x.size(0))
+                else:
+                    losses_m.update(loss.item(), batch_x.size(0))
 
                 if self.rank == 0:
                     log_buffer = 'train loss: {:.4e}'.format(loss.item())
