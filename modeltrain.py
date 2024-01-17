@@ -61,7 +61,8 @@ class modeltrain(object):
         self.method = method_maps[self.args.method.lower()](self.model_data)
         self.method.model.eval()
         # setup ddp training
-        self.method.init_distributed()
+        if self.dist:
+            self.method.init_distributed()
 
 
     def get_data(self):
@@ -100,6 +101,14 @@ class modeltrain(object):
                 if not self.dist else weights_to_cpu(self.method.model.module.state_dict()),
             'scheduler': self.method.scheduler.state_dict()
             }
+        torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
+        del checkpoint
+    
+
+    def save_checkpoint(self, name=''):
+        """Saving models data to checkpoints"""
+        checkpoint = weights_to_cpu(self.method.model.state_dict()) \
+                if not self.dist else weights_to_cpu(self.method.model.module.state_dict())
         torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
         del checkpoint
 
@@ -221,6 +230,8 @@ class modeltrain(object):
                 print_log('Early stop training at f{} epoch'.format(epoch))
                 break
             print_log("")
+            
+        self.save_checkpoint("last_checkpoint")
 
         if not check_dir(self.model_path):  # exit training when work_dir is removed
             assert False and "Exit training because work_dir is removed"

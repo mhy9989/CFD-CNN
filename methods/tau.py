@@ -43,7 +43,7 @@ class TAU(SimVP):
             
             for batch_x, batch_y in train_loader:
                 data_time_m.update(time.time() - end)
-                if self.by_epoch:
+                if self.by_epoch or not self.dist:
                     self.optimizer.zero_grad()
 
                 batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
@@ -52,10 +52,11 @@ class TAU(SimVP):
                 loss = self.cal_loss(pred_y, batch_y)
 
                 if not self.dist:
-                    losses_m.update(loss.item(), batch_x.size(0))
+                    loss.backward()
+                else:
+                    self.model.backward(loss)
 
-                self.model.backward(loss)
-                if self.by_epoch:
+                if self.by_epoch or not self.dist:
                     self.optimizer.step()
                 else:
                     self.model.step()
@@ -65,6 +66,8 @@ class TAU(SimVP):
 
                 if self.dist:
                     losses_m.update(reduce_tensor(loss), batch_x.size(0))
+                else:
+                    losses_m.update(loss.item(), batch_x.size(0))
 
                 if self.rank == 0:
                     log_buffer = 'train loss: {:.4e}'.format(loss.item())
