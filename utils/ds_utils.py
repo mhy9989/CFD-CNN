@@ -27,9 +27,9 @@ def get_train_ds_config(args,steps_per_print):
         "prescale_gradients": False,
         "wall_clock_breakdown": False,
     }
-    for key in default_ds_config.keys():
-        if key not in ds_config.keys():
-            ds_config[key] = default_ds_config[key]
+    # for key in default_ds_config.keys():
+    #     if key not in ds_config.keys():
+    #         ds_config[key] = default_ds_config[key]
 
-    return ds_config
+    return default_ds_config
 

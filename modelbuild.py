@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os.path as osp
-from modeldefine import *
 import torch
 import torch.distributed as dist
 import deepspeed
@@ -37,7 +36,7 @@ class modelbuild():
         model_config.in_shape = self.args.in_shape
         net = model_maps[self.args.method.lower()]
         self.net = net(**model_config).to(self.args.device)
-        print_log(f"The neural network is created. Network type: {self.args.method.lower()}")
+        print_log(f"The neural network is created. Network type: {self.args.method.lower()}({self.args.model_type})")
 
 
     def init_optimizer(self):

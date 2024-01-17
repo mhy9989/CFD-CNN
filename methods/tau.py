@@ -19,7 +19,7 @@ class TAU(SimVP):
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss =  self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)# + 0.1 * GS(pred_y, batch_y, self.jac, mode = "CD4")
+        loss = self.base_criterion(pred_y, batch_y)# + self.args.alpha * diff_div_reg(pred_y, batch_y)# + 0.1 * GS(pred_y, batch_y, self.jac, mode = "CD4")
         if self.args.regularization > 0:
             reg_loss = self.reg(self.model)
             loss += reg_loss
