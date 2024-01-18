@@ -1,6 +1,6 @@
 {
   "setup_config":{
-    "seed": 2023,
+    "seed": 199989,
     "diff_seed": false,
     "per_device_train_batch_size": 4,
     "per_device_valid_batch_size": 4,
@@ -70,7 +70,7 @@
     "final_div_factor": 1e4
   },
   "model_config": {
-    "model_type": "tau",
+    "model_type": "sau",
     "hid_S": 32,
     "hid_T": 256,
     "N_S": 2,

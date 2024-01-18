@@ -588,7 +588,7 @@ class ExternalAttentionModule(nn.Module):
         dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
         dd_p = (dilation * (dd_k - 1) // 2)
 
-        t = int(abs((torch.log2(dim) + b) / gamma))
+        t = int(abs((math.log2(dim) + b) / gamma))
         k = t if (t % 2) else (t + 1)
 
         self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
@@ -623,7 +623,7 @@ class SpatiotemporalAttentionModule(nn.Module):
         dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
         dd_p = (dilation * (dd_k - 1) // 2)
 
-        t = int(abs((torch.log2(dim) + b) / gamma))
+        t = int(abs((math.log2(dim) + b) / gamma))
         k = t if (t % 2) else (t + 1)
 
         self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
@@ -665,7 +665,7 @@ class SpatiotemporalAttentionModule2(nn.Module):
         dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
         dd_p = (dilation * (dd_k - 1) // 2)
 
-        t = int(abs((torch.log2(dim) + b) / gamma))
+        t = int(abs((math.log2(dim) + b) / gamma))
         k = t if (t % 2) else (t + 1)
 
         self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
