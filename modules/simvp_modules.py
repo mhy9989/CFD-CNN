@@ -549,13 +549,20 @@ class ViTSubBlock(ViTBlock):
 class TemporalAttention(nn.Module):
     """A Temporal Attention block for Temporal Attention Unit"""
 
-    def __init__(self, d_model, w, kernel_size=21, mode="tau", attn_shortcut=True):
+    def __init__(self, d_model, h_w, kernel_size=21, mode="tau", attn_shortcut=True):
         super().__init__()
+        
         self.proj_1 = nn.Conv2d(d_model, d_model, 1)         # 1x1 conv
         self.activation = nn.GELU()                          # GELU
-        self.spatial_gating_unit = SpatiotemporalAttentionModule(d_model, w, kernel_size) \
-                                    if mode == "sau" \
-                                    else TemporalAttentionModule(d_model, kernel_size)
+        if mode == "sau":
+            a = SpatiotemporalAttentionModule(d_model, h_w, kernel_size)
+        elif mode == "sau2":
+            a = SpatiotemporalAttentionModule2(d_model, h_w, kernel_size)
+        elif mode == "eca":
+            a = ExternalAttentionModule(d_model, kernel_size)
+        else:
+            a = TemporalAttentionModule(d_model, kernel_size)
+        self.spatial_gating_unit = a
         self.proj_2 = nn.Conv2d(d_model, d_model, 1)         # 1x1 conv
         self.attn_shortcut = attn_shortcut
 
@@ -571,21 +578,26 @@ class TemporalAttention(nn.Module):
         return x
     
 
-class SpatiotemporalAttentionModule(nn.Module):
-    """Spatiotemporal Attention for SimVP"""
+class ExternalAttentionModule(nn.Module):
+    """External Attention for SimVP"""
 
-    def __init__(self, dim, w, kernel_size, dilation=3):
+    def __init__(self, dim, kernel_size, dilation=3, gamma=2, b=1):
         super().__init__()
         d_k = 2 * dilation - 1
         d_p = (d_k - 1) // 2
         dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
         dd_p = (dilation * (dd_k - 1) // 2)
 
+        t = int(abs((torch.log2(dim) + b) / gamma))
+        k = t if (t % 2) else (t + 1)
+
         self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
         self.conv_spatial = nn.Conv2d(
             dim, dim, dd_k, stride=1, padding=dd_p, groups=dim, dilation=dilation)
         self.conv1 = nn.Conv2d(dim, dim, 1)
-        self.conv00 = nn.Conv2d(w, w, d_k, padding=d_p, groups=w)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv=nn.Conv1d(1,1,kernel_size=k,padding=int(k/2),bias=False)
+        self.sigmoid=nn.Sigmoid()
 
     def forward(self, x):
         u = x.clone()
@@ -593,10 +605,95 @@ class SpatiotemporalAttentionModule(nn.Module):
         attn = self.conv_spatial(attn) # depth-wise dilation convolution
         f_x = self.conv1(attn)         # 1x1 conv
         # append a se operation
-        x = x.permute(0, 3, 2, 1)
-        se_atten = self.conv00(x)
-        se_atten = se_atten.permute(0, 3, 2, 1)
-        return torch.sigmoid(se_atten * f_x) * u
+        eca_atten = self.avg_pool(x)
+        eca_atten = eca_atten.squeeze(-1).permute(0,2,1)
+        eca_atten = self.conv(eca_atten)
+        eca_atten = eca_atten.permute(0,2,1).unsqueeze(-1)
+        eca_atten = self.sigmoid(eca_atten)
+        return eca_atten.expand_as(u) * f_x * u
+
+class SpatiotemporalAttentionModule(nn.Module):
+    """Spatiotemporal Attention for SimVP"""
+
+    def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
+        super().__init__()
+        h, w = h_w
+        d_k = 2 * dilation - 1
+        d_p = (d_k - 1) // 2
+        dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
+        dd_p = (dilation * (dd_k - 1) // 2)
+
+        t = int(abs((torch.log2(dim) + b) / gamma))
+        k = t if (t % 2) else (t + 1)
+
+        self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
+        self.conv_spatial = nn.Conv2d(
+            dim, dim, dd_k, stride=1, padding=dd_p, groups=dim, dilation=dilation)
+        self.conv1 = nn.Conv2d(dim, dim, 1)
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.conv_h=nn.Conv1d(h,h,kernel_size=k,padding=int(k/2),bias=False)
+        self.conv_w=nn.Conv1d(w,w,kernel_size=k,padding=int(k/2),bias=False)
+        self.sigmoid=nn.Sigmoid()
+
+    def forward(self, x):
+        u = x.clone()
+        attn = self.conv0(x)           # depth-wise conv
+        attn = self.conv_spatial(attn) # depth-wise dilation convolution
+        f_x = self.conv1(attn)         # 1x1 conv
+        # append a se operation
+        x_h = self.pool_h(x).squeeze(-1).permute(0,2,1) 
+        x_w = self.pool_w(x).squeeze(-2).permute(0,2,1) 
+        x_h = self.conv_h(x_h)
+        x_w = self.conv_w(x_w)
+        a_h = x_h.permute(0,2,1).unsqueeze(-1)
+        a_w = x_w.permute(0,2,1).unsqueeze(-2)
+        a_h = self.sigmoid(a_h) 
+        a_w = self.sigmoid(a_w)
+        return a_w.expand_as(u) * a_h.expand_as(u) * f_x * u
+
+
+class SpatiotemporalAttentionModule2(nn.Module):
+    """Spatiotemporal2 Attention for SimVP"""
+
+    def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
+        super().__init__()
+        self.h, self.w = h_w
+        self.hw = self.h + self.w
+        d_k = 2 * dilation - 1
+        d_p = (d_k - 1) // 2
+        dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
+        dd_p = (dilation * (dd_k - 1) // 2)
+
+        t = int(abs((torch.log2(dim) + b) / gamma))
+        k = t if (t % 2) else (t + 1)
+
+        self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
+        self.conv_spatial = nn.Conv2d(
+            dim, dim, dd_k, stride=1, padding=dd_p, groups=dim, dilation=dilation)
+        self.conv1 = nn.Conv2d(dim, dim, 1)
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.conv_c = nn.Conv1d(self.hw, self.hw, kernel_size=k,padding=int(k/2),bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        u = x.clone()
+        attn = self.conv0(x)           # depth-wise conv
+        attn = self.conv_spatial(attn) # depth-wise dilation convolution
+        f_x = self.conv1(attn)         # 1x1 conv
+        # append a se operation
+        x_h = self.pool_h(x).squeeze(-1).permute(0,2,1) 
+        x_w = self.pool_w(x).squeeze(-2).permute(0,2,1) 
+        y = torch.cat([x_h, x_w], dim=1)
+        y = self.conv_c(y)
+        x_h, x_w = torch.split(y, [self.h, self.w], dim=1)
+        a_h = x_h.permute(0,2,1).unsqueeze(-1)
+        a_w = x_w.permute(0,2,1).unsqueeze(-2)
+        a_h = self.sigmoid(a_h) 
+        a_w = self.sigmoid(a_w)
+        return a_w.expand_as(u) * a_h.expand_as(u) * f_x * u
+
 
 class TemporalAttentionModule(nn.Module):
     """Large Kernel Attention for SimVP"""
@@ -636,9 +733,10 @@ class TemporalAttentionModule(nn.Module):
 class TAUSubBlock(GASubBlock):
     """A TAUBlock (tau) for Temporal Attention Unit"""
 
-    def __init__(self, dim, w, kernel_size=21, mlp_ratio=4.,
+    def __init__(self, dim, h_w, kernel_size=21, mlp_ratio=4.,
                  drop=0., drop_path=0.1, init_value=1e-2, act_layer=nn.GELU, mode = "tau"):
         super().__init__(dim=dim, kernel_size=kernel_size, mlp_ratio=mlp_ratio,
                  drop=drop, drop_path=drop_path, init_value=init_value, act_layer=act_layer)
         
-        self.attn = TemporalAttention(dim, w, kernel_size, mode)
+        self.attn = TemporalAttention(dim, h_w, kernel_size, mode)
+

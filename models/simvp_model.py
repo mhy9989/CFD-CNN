@@ -195,12 +195,20 @@ class MetaBlock(nn.Module):
                 in_channels, mlp_ratio=mlp_ratio, drop=drop, drop_path=drop_path)
         elif model_type == 'tau':
             self.block = TAUSubBlock(
-                in_channels, input_resolution[1], kernel_size=21, mlp_ratio=mlp_ratio,
+                in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
                 drop=drop, drop_path=drop_path, act_layer=nn.GELU)
         elif model_type == 'sau':
             self.block = TAUSubBlock(
-                in_channels, input_resolution[1], kernel_size=21, mlp_ratio=mlp_ratio,
+                in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
                 drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "sau")
+        elif model_type == 'sau2':
+            self.block = TAUSubBlock(
+                in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
+                drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "sau2")
+        elif model_type == 'eca':
+            self.block = TAUSubBlock(
+                in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
+                drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "eca")
         else:
             assert False and "Invalid model_type in SimVP"
 
