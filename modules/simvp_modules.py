@@ -612,6 +612,7 @@ class ExternalAttentionModule(nn.Module):
         eca_atten = self.sigmoid(eca_atten)
         return eca_atten.expand_as(u) * f_x * u
 
+
 class SpatiotemporalAttentionModule(nn.Module):
     """Spatiotemporal Attention for SimVP"""
 
@@ -632,6 +633,7 @@ class SpatiotemporalAttentionModule(nn.Module):
         self.conv1 = nn.Conv2d(dim, dim, 1)
         self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
         self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.pool = nn.AdaptiveAvgPool1d(1)
         self.conv_h=nn.Conv1d(h,h,kernel_size=k,padding=int(k/2),bias=False)
         self.conv_w=nn.Conv1d(w,w,kernel_size=k,padding=int(k/2),bias=False)
         self.sigmoid=nn.Sigmoid()
@@ -642,15 +644,16 @@ class SpatiotemporalAttentionModule(nn.Module):
         attn = self.conv_spatial(attn) # depth-wise dilation convolution
         f_x = self.conv1(attn)         # 1x1 conv
         # append a se operation
+        b, c, _, _ = x.size()
         x_h = self.pool_h(x).squeeze(-1).permute(0,2,1) 
         x_w = self.pool_w(x).squeeze(-2).permute(0,2,1) 
         x_h = self.conv_h(x_h)
         x_w = self.conv_w(x_w)
-        a_h = x_h.permute(0,2,1).unsqueeze(-1)
-        a_w = x_w.permute(0,2,1).unsqueeze(-2)
+        a_h = self.pool(x_h.permute(0,2,1)).view(b, c, 1, 1)
+        a_w = self.pool(x_w.permute(0,2,1)).view(b, c, 1, 1)
         a_h = self.sigmoid(a_h) 
         a_w = self.sigmoid(a_w)
-        return a_w.expand_as(u) * a_h.expand_as(u) * f_x * u
+        return (a_w.expand_as(u) + a_h.expand_as(u)) * f_x * u
 
 
 class SpatiotemporalAttentionModule2(nn.Module):
@@ -675,6 +678,7 @@ class SpatiotemporalAttentionModule2(nn.Module):
         self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
         self.pool_w = nn.AdaptiveAvgPool2d((1, None))
         self.conv_c = nn.Conv1d(self.hw, self.hw, kernel_size=k,padding=int(k/2),bias=False)
+        self.pool = nn.AdaptiveAvgPool1d(1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -683,16 +687,17 @@ class SpatiotemporalAttentionModule2(nn.Module):
         attn = self.conv_spatial(attn) # depth-wise dilation convolution
         f_x = self.conv1(attn)         # 1x1 conv
         # append a se operation
-        x_h = self.pool_h(x).squeeze(-1).permute(0,2,1) 
-        x_w = self.pool_w(x).squeeze(-2).permute(0,2,1) 
+        b, c, _, _ = x.size()
+        x_h = self.pool_h(x).squeeze(-1).permute(0,2,1)
+        x_w = self.pool_w(x).squeeze(-2).permute(0,2,1)
         y = torch.cat([x_h, x_w], dim=1)
         y = self.conv_c(y)
         x_h, x_w = torch.split(y, [self.h, self.w], dim=1)
-        a_h = x_h.permute(0,2,1).unsqueeze(-1)
-        a_w = x_w.permute(0,2,1).unsqueeze(-2)
-        a_h = self.sigmoid(a_h) 
+        a_h = self.pool(x_h.permute(0,2,1)).view(b, c, 1, 1)
+        a_w = self.pool(x_w.permute(0,2,1)).view(b, c, 1, 1)
+        a_h = self.sigmoid(a_h)
         a_w = self.sigmoid(a_w)
-        return a_w.expand_as(u) * a_h.expand_as(u) * f_x * u
+        return (a_w.expand_as(u) + a_h.expand_as(u)) * f_x * u
 
 
 class TemporalAttentionModule(nn.Module):
