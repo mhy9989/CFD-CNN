@@ -124,7 +124,7 @@ class modeltrain(object):
         if not isinstance(checkpoint, dict):
             raise RuntimeError(f'No state_dict found in checkpoint file {filename}')
         self.load_from_state_dict(checkpoint['state_dict'])
-        if checkpoint.get('epoch', None) is not None:
+        if checkpoint.get('epoch', None) is not None and self.args.if_continue:
             self.epoch = checkpoint['epoch']
             self.method.optimizer.load_state_dict(checkpoint['optimizer'])
             self.method.scheduler.load_state_dict(checkpoint['scheduler'])
@@ -288,6 +288,10 @@ class modeltrain(object):
                     np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
 
         return eval_res_o, eval_res
+    
+    def muti_inference(self, num_infer):
+        """A inference loop of methods with multistep"""
+
 
     def inference(self):
         """A inference loop of methods"""
