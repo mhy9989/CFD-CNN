@@ -9,36 +9,41 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, rando
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def get_datloader(args, mode = "train", test_num = 0):
+def get_datloader(args, mode = "train", infer_num = 0):
     """Generate dataloader"""
     dataset = CFD_Dataset(args)
     data_scaler_list = [dataset.scaler_list[i] for i in args.data_select] if dataset.scaler_list else None
     print_log(f"Length of all dataset: {len(dataset)}")
     # Split dataset into training dataset, validation dataset and test_dataset
     # The last line of data is test data
-    if mode == "test":
-        if test_num < 0:
-            test_num += len(dataset)
+    if mode == "inference":
+        if infer_num < 0:
+            infer_num += len(dataset)
+        '''
         test_dataset = Subset(dataset, [test_num])
         test_loader = DataLoader(test_dataset,
                                 num_workers=0,
                                 batch_size=len(test_dataset))
         return test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
-    else:
-        test_num = len(dataset) -1
-        test_dataset = Subset(dataset, [test_num])
+        '''
+    indices = list(range(len(dataset)))
+    indices_train_valid = indices[:-args.text_num]
+    indices_test = indices[-args.text_num:]
+
+    train_valid_dataset = Subset(dataset, indices_train_valid)
+    test_dataset = Subset(dataset, indices_test)
     
-    # Reset the length of dataset, del last line
-    dataset.custom_length -= 1
-    trainlen = int((1 - args.valid_ratio) * len(dataset))
-    lengths = [trainlen, len(dataset) - trainlen]
-    train_dataset, valid_dataset = random_split(dataset, lengths)
+    trainlen = int((1 - args.valid_ratio) * len(train_valid_dataset))
+    lengths = [trainlen, len(train_valid_dataset) - trainlen]
+    train_dataset, valid_dataset = random_split(train_valid_dataset, lengths)
 
     print_log(f"Length of input dataset: {len(dataset)}")
     print_log(f"Length of train_dataset: {len(train_dataset)}")
     print_log(f"Length of valid_dataset: {len(valid_dataset)}")
+    print_log(f"Length of test_dataset: {len(valid_dataset)}")
     print_log(f"Shape of input_data: {test_dataset[0][0].shape}")
     print_log(f"Shape of label_data: {test_dataset[0][1].shape}")
+
 
     # DataLoaders creation:
     if not args.dist:
@@ -61,9 +66,9 @@ def get_datloader(args, mode = "train", test_num = 0):
                                 pin_memory=True,
                                 batch_size=args.per_device_valid_batch_size)
     test_loader = DataLoader(test_dataset,
-                                num_workers=0,
+                                num_workers=args.num_workers,
                                 pin_memory=True,
-                                batch_size=len(test_dataset))
+                                batch_size=args.per_device_valid_batch_size)
     return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh, dataset.jac
 
 
