@@ -8,6 +8,7 @@ import torch
 from deepspeed.accelerator import get_accelerator
 from core import metric, Recorder
 from methods import method_maps
+from timm.utils import AverageMeter
 from utils import (plot_figure, check_dir, print_log, weights_to_cpu,
                    measure_throughput, output_namespace)
 
@@ -191,26 +192,30 @@ class modeltrain(object):
         vali_loss = False
         early_stop = False
         eta = 1.0  # PredRNN variants
+        epoch_time_m = AverageMeter()
         for epoch in range(self.epoch, self.max_epochs):
+            begin = time.time()
             if self.args.empty_cache:
                 torch.cuda.empty_cache()
 
             if self.dist and hasattr(self.train_loader.sampler, 'set_epoch'):
                 self.train_loader.sampler.set_epoch(epoch)
 
-            num_updates, loss_mean, eta = self.method.train_one_epoch(self.train_loader,
+            num_updates, loss_mean, eta , = self.method.train_one_epoch(self.train_loader,
                                                                       epoch, num_updates, eta)
 
             self.epoch = epoch
             if self.args.valid_ratio != 0:
                 with torch.no_grad():
                     vali_loss = self.vali()
+            epoch_time_m.update(time.time() - begin)
             
             cur_lr = self.method.current_lr()
             cur_lr = sum(cur_lr) / len(cur_lr)
             print_log('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}'.format(
                         epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
-            
+
+            print_log(f'Epoch time: {epoch_time_m.val}s, Average time: {epoch_time_m.avg}s')
             if self.args.mem_log:
                 MemAllocated = round(get_accelerator().memory_allocated() / 1024**3, 2)
                 MaxMemAllocated = round(get_accelerator().max_memory_allocated() / 1024**3, 2)
@@ -279,7 +284,7 @@ class modeltrain(object):
             if self.rank == 0:
                 for t in range(self.args.data_after):
                     self.plot_test(t, results_n['preds'][-1,t], results_n['trues'][-1,t], "Original")
-                    
+
                 folder_path = osp.join(self.model_path, 'saved', "Original")
                 check_dir(folder_path)
 
