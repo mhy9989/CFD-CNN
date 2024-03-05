@@ -5,7 +5,7 @@ from .parser import default_parser
 from .collect import (gather_tensors, gather_tensors_batch, nondist_forward_collect,
                       dist_forward_collect, collect_results_gpu)
 from .progressbar import get_progress
-from .plot_fig import plot_test_figure, plot_learning_curve
+from .plot_fig import plot_figure, plot_learning_curve
 from .jacobian import jac, dx_y
 
 __all__ = [
@@ -14,6 +14,6 @@ __all__ = [
     'get_train_ds_config', 'default_parser',
     'gather_tensors', 'gather_tensors_batch', 'nondist_forward_collect',
     'dist_forward_collect', 'collect_results_gpu', 'get_progress',
-    'plot_test_figure', 'plot_learning_curve',
+    'plot_figure', 'plot_learning_curve',
     'jac', 'dx_y'
 ]

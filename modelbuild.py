@@ -12,7 +12,6 @@ import time
 import logging
 from utils.parser import default_parser
 from models import model_maps
-
 from easydict import EasyDict as edict
 
 
