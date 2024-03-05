@@ -6,8 +6,7 @@ from utils import print_log
 import os
 import os.path as osp
 from matplotlib import rcParams
-from matplotlib.ticker import AutoMinorLocator
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 config = {
     "font.family":'Times New Roman',
     "axes.unicode_minus": False 
@@ -31,8 +30,8 @@ def plot_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic
                     format = '%.1e')
     plt.title(f"{mode} {data_name} data of type {data_select}")
     
-    plt.xlabel(r'$\mathit{X}$(mm)')
-    plt.ylabel(r'$\mathit{Y}$(mm)')
+    plt.xlabel(r'$\mathit{X}/mm$')
+    plt.ylabel(r'$\textit{Y}/mm$')
     pic_path = osp.join(pic_folder, pic_name)
     plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
     print_log(f'{data_select}_{mode}_{data_name} picture is saved')

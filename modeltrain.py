@@ -250,40 +250,43 @@ class modeltrain(object):
         channel_names = self.args.data_use
         metric_list = self.method.metric_list
 
-        eval_res_o=""
         # Computed
-        eval_res_o, eval_log_o = metric(results['preds'], results['trues'],
+        eval_res_av, eval_log_av = metric(results['preds'], results['trues'],
                                     metrics=metric_list, channel_names=channel_names, mode = "Computed")
-        results['metrics'] = np.array([eval_res_o['mae'], eval_res_o['mse'], eval_res_o['mre']])
-        print_log(f"{eval_log_o}")
+        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+        print_log(f"{eval_log_av}")
 
         if self.rank == 0:
-            self.plot_test(results['inputs'][-1,-1], results['trues'], results['preds'], "Computed")
+            for t in range(self.args.data_after):
+                self.plot_test(t, results['preds'][-1,t], results['trues'][-1,t], "Computed")
+
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
 
             for np_data in ['metrics', 'inputs', 'trues', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
-        eval_res=""
+        eval_res_av_n=""
         # Original
         if self.scaler_list:
             results_n = self.de_norm(results)
-            eval_res, eval_log = metric(results['preds'], results['trues'],
+            eval_res_av_n, eval_log = metric(results['preds'], results['trues'],
                                         self.scaler_list,
                                         metrics=metric_list, channel_names=channel_names, mode = "Original")
-            results['metrics'] = np.array([eval_res['mae'], eval_res['mse'], eval_res['mre']])
+            results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
             print_log(f"{eval_log}")
 
             if self.rank == 0:
-                self.plot_test(results_n['inputs'], results_n['trues'], results_n['preds'], "Original")
+                for t in range(self.args.data_after):
+                    self.plot_test(t, results_n['preds'][-1,t], results_n['trues'][-1,t], "Original")
+                    
                 folder_path = osp.join(self.model_path, 'saved', "Original")
                 check_dir(folder_path)
 
                 for np_data in ['metrics', 'inputs', 'trues', 'preds']:
                     np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
 
-        return eval_res_o, eval_res
+        return eval_res_av, eval_res_av_n
     
     def muti_inference(self, num_infer):
         """A inference loop of methods with multistep"""
@@ -304,30 +307,27 @@ class modeltrain(object):
 
         return None
     
-    def plot_test(self, inputs, tures, preds, mode, 
+    def plot_test(self, t, tures, preds, mode, 
                   dpi = 300, dir_name = "pic", 
                   min_max_base = None, min_max_delt = None):
-        C, H, W = tures.shape
-        tures = tures.reshape(C, H, W)
-        preds = preds.reshape(C, H, W)
         data_select_num = self.args.data_select_num
-        pic_folder = osp.join(self.model_path, dir_name, mode)
+        pic_folder = osp.join(self.model_path, dir_name, mode, t)
         check_dir(pic_folder)
+        
         for i in range(data_select_num):
-            if min_max_base == None:
-                min_max = [inputs[i].min(), inputs[i].max()]
-            plot_figure(self.x_mesh, self.y_mesh, min_max, inputs[i], 
-                             self.args.data_use[i], "inputs", mode, pic_folder, dpi)
+            select_pic = osp.join(pic_folder, self.args.data_use[i])
+            check_dir(select_pic)
+
             if min_max_base == None:
                 min_max = [tures[i].min(), tures[i].max()]
             plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i], 
-                             self.args.data_use[i], "label", mode, pic_folder, dpi)
+                             self.args.data_use[i], "label", mode, select_pic, dpi)
             plot_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
-                             self.args.data_use[i], "pred", mode, pic_folder, dpi)
+                             self.args.data_use[i], "pred", mode, select_pic, dpi)
             if min_max_delt == None:
                 min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
             plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i]-preds[i], 
-                             self.args.data_use[i], "delt", mode, pic_folder, dpi)
+                             self.args.data_use[i], "delt", mode, select_pic, dpi)
         return None
     
     def de_norm(self, results):
