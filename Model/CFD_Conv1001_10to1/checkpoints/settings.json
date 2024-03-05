@@ -10,6 +10,7 @@
     "max_epoch": 500,
     "lossfun": "MSE",
     "load_from": false,
+    "if_continue": true,
     "regularization": 0.0,
     "if_display_method_info": false,
     "mem_log": true,

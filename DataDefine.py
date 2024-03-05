@@ -104,18 +104,18 @@ class CFD_Dataset(Dataset):
             raise EOFError
         
         mesh = np.load(args.mesh_path)
-        data_matrix = np.load(args.data_path)
-        self.data_total_num = data_matrix.shape[0]
+        data_matrix = np.load(args.data_path)[:self.data_num]
+
         self.x_mesh = mesh[0][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
         self.y_mesh = mesh[1][ny_range[0]:ny_range[1],nx_range[0]:nx_range[1]]
 
         # Reshape data: (num, data_type,  height, width) -> (num, data_type, height * width)
-        data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num,-1)
+        data_matrix = data_matrix.reshape(self.data_num, self.data_type_num,-1)
         if self.scaler_list:
             for i in range(self.data_type_num):
                 data_matrix[:,i] = self.scaler_list[i].transform(data_matrix[:,i])
         
-        self.data_matrix = data_matrix.reshape(self.data_total_num, self.data_type_num, self.height, self.width)
+        self.data_matrix = data_matrix.reshape(self.data_num, self.data_type_num, self.height, self.width)
         self.data_matrix = self.data_matrix[:, self.data_select, ny_range[0]:ny_range[1], nx_range[0]:nx_range[1]]
         
         # comput jac
@@ -134,7 +134,7 @@ class CFD_Dataset(Dataset):
         in_la_data = self.data_matrix[index:index+batch_num]
 
         # Convert Data into PyTorch tensors
-        in_la_data = torch.Tensor(in_la_data)            #(batch, data_type, height, width)
+        in_la_data = torch.Tensor(in_la_data)             #(batch, data_type, height, width)
         inputs = in_la_data[:self.data_previous]          #(data_previous, data_type, height, width)
         labels = in_la_data[self.data_previous:]          #(data_after, data_type, height, width)
         return inputs, labels
