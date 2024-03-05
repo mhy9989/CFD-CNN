@@ -5,20 +5,34 @@ import matplotlib.pyplot as plt
 from utils import print_log
 import os
 import os.path as osp
+from matplotlib import rcParams
+from matplotlib.ticker import AutoMinorLocator
+from matplotlib.ticker import MaxNLocator
+config = {
+    "font.family":'Times New Roman',
+    "axes.unicode_minus": False 
+}
+rcParams.update(config)
 
-def plot_test_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
+def plot_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
     cmap = 'RdBu_r'
     levels = np.linspace(min_max[0], min_max[1], 600)
     map = plt.contourf(x_mesh, y_mesh, data, levels,cmap=cmap) 
     pic_name = f'{data_select}_{mode}_{data_name}.png'
     ax = plt.gca()
     ax.set_aspect(1) 
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.xaxis.set_major_locator(MaxNLocator(7))
+    ax.yaxis.set_major_locator(MaxNLocator(5))
+
     plt.colorbar(map,fraction=0.02, pad=0.03,
                     ticks=np.linspace(min_max[0], min_max[1], 5),
                     format = '%.1e')
     plt.title(f"{mode} {data_name} data of type {data_select}")
-    plt.xlabel('x axis')
-    plt.ylabel('y axis')
+    
+    plt.xlabel(r'$\mathit{X}$(mm)')
+    plt.ylabel(r'$\mathit{Y}$(mm)')
     pic_path = osp.join(pic_folder, pic_name)
     plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
     print_log(f'{data_select}_{mode}_{data_name} picture is saved')

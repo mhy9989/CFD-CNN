@@ -8,14 +8,14 @@ import torch
 from deepspeed.accelerator import get_accelerator
 from core import metric, Recorder
 from methods import method_maps
-from utils import (plot_test_figure, check_dir, print_log, weights_to_cpu,
+from utils import (plot_figure, check_dir, print_log, weights_to_cpu,
                    measure_throughput, output_namespace)
 
 
 class modeltrain(object):
     """The basic class of PyTorch training and evaluation."""
 
-    def __init__(self, model_data, model_path, mode = "train", test_num = -1):
+    def __init__(self, model_data, model_path, mode = "train", infer_num = [-1]):
         """Initialize experiments (non-dist as an example)"""
         self.model_data = model_data
         self.args = model_data[0]
@@ -31,7 +31,7 @@ class modeltrain(object):
         self.early_stop = self.args.early_stop_epoch
         self.model_path = model_path
         self.best_loss = 100.
-        self.test_num = test_num
+        self.infer_num = infer_num
         self.mode = mode
 
         self.preparation()
@@ -80,16 +80,12 @@ class modeltrain(object):
             if self.vali_loader is None:
                 self.vali_loader = self.test_loader
         else:
-            custom_length = int(self.args.data_num - self.args.data_previous - self.args.data_after + 1)
-            if abs(self.test_num) < (custom_length):
-                (self.test_loader, 
-                self.scaler_list, 
-                self.x_mesh, 
-                self.y_mesh) = get_datloader(self.args, "test", self.test_num)
-                self.method.scaler_list = self.scaler_list
-            else:
-                print_log(f"num {self.test_num} out of data range")
-                raise ValueError
+            (self.infer_loader, 
+            self.scaler_list, 
+            self.x_mesh, 
+            self.y_mesh) = get_datloader(self.args, "inference", self.infer_num)
+            self.method.scaler_list = self.scaler_list
+
 
 
     def save(self, name=''):
@@ -262,7 +258,7 @@ class modeltrain(object):
         print_log(f"{eval_log_o}")
 
         if self.rank == 0:
-            self.plot_test(results['inputs'], results['trues'], results['preds'], "Computed")
+            self.plot_test(results['inputs'][-1,-1], results['trues'], results['preds'], "Computed")
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
 
@@ -308,27 +304,29 @@ class modeltrain(object):
 
         return None
     
-    def plot_test(self, inputs, tures, preds, mode, dpi = 300, dir_name = "pic"):
-        B, T, C, H, W = tures.shape
-        if B != 1 or T != 1:
-            raise ValueError("B and T must is 1")
-        inputs = inputs[0, -1]
+    def plot_test(self, inputs, tures, preds, mode, 
+                  dpi = 300, dir_name = "pic", 
+                  min_max_base = None, min_max_delt = None):
+        C, H, W = tures.shape
         tures = tures.reshape(C, H, W)
         preds = preds.reshape(C, H, W)
         data_select_num = self.args.data_select_num
         pic_folder = osp.join(self.model_path, dir_name, mode)
         check_dir(pic_folder)
         for i in range(data_select_num):
-            min_max = [inputs[i].min(), inputs[i].max()]
-            plot_test_figure(self.x_mesh, self.y_mesh, min_max, inputs[i], 
+            if min_max_base == None:
+                min_max = [inputs[i].min(), inputs[i].max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, inputs[i], 
                              self.args.data_use[i], "inputs", mode, pic_folder, dpi)
-            min_max = [tures[i].min(), tures[i].max()]
-            plot_test_figure(self.x_mesh, self.y_mesh, min_max, tures[i], 
+            if min_max_base == None:
+                min_max = [tures[i].min(), tures[i].max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i], 
                              self.args.data_use[i], "label", mode, pic_folder, dpi)
-            plot_test_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
+            plot_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
                              self.args.data_use[i], "pred", mode, pic_folder, dpi)
-            min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
-            plot_test_figure(self.x_mesh, self.y_mesh, min_max, tures[i]-preds[i], 
+            if min_max_delt == None:
+                min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i]-preds[i], 
                              self.args.data_use[i], "delt", mode, pic_folder, dpi)
         return None
     

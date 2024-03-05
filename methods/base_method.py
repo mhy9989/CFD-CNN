@@ -209,9 +209,9 @@ class Base_method(object):
         """
         self.model.eval()
         if self.dist and self.world_size > 1:
-            results = self.dist_forward_collect(test_loader, gather_data=True, mode="Testing...")
+            results = self.dist_forward_collect(test_loader, len(test_loader.dataset), gather_data=True, mode="Testing...")
         else:
-            results = self.nondist_forward_collect(test_loader, gather_data=True, mode="Testing...")
+            results = self.nondist_forward_collect(test_loader, len(test_loader.dataset), gather_data=True, mode="Testing...")
 
         return results
 

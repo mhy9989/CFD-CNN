@@ -9,23 +9,26 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, rando
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def get_datloader(args, mode = "train", infer_num = 0):
+def get_datloader(args, mode = "train", infer_num = [0]):
     """Generate dataloader"""
     dataset = CFD_Dataset(args)
     data_scaler_list = [dataset.scaler_list[i] for i in args.data_select] if dataset.scaler_list else None
     print_log(f"Length of all dataset: {len(dataset)}")
-    # Split dataset into training dataset, validation dataset and test_dataset
-    # The last line of data is test data
+   
     if mode == "inference":
-        if infer_num < 0:
-            infer_num += len(dataset)
-        '''
-        test_dataset = Subset(dataset, [test_num])
-        test_loader = DataLoader(test_dataset,
-                                num_workers=0,
-                                batch_size=len(test_dataset))
-        return test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
-        '''
+        inference_list = []
+        for i in infer_num:
+            if i > len(dataset)-1 or i < -len(dataset):
+                print_log(f"Error inference num: {i}, used range: ({-len(dataset)}, {len(dataset)-1})")
+                raise EOFError
+            inference_list.append(i+len(dataset) if i < 0 else i)
+        infer_dataset = Subset(dataset, inference_list)
+        infer_loader = DataLoader(infer_dataset,
+                                num_workers=args.num_workers,
+                                batch_size=args.per_device_valid_batch_size)
+        return infer_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
+    
+    # Split dataset into training dataset, validation dataset and test_dataset
     indices = list(range(len(dataset)))
     indices_train_valid = indices[:-args.text_num]
     indices_test = indices[-args.text_num:]
