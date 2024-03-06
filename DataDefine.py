@@ -9,24 +9,32 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, rando
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def get_datloader(args, mode = "train", infer_num = [0]):
+def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     """Generate dataloader"""
-    dataset = CFD_Dataset(args)
+    dataset = CFD_Dataset(args, infer_step)
     data_scaler_list = [dataset.scaler_list[i] for i in args.data_select] if dataset.scaler_list else None
     print_log(f"Length of all dataset: {len(dataset)}")
    
     if mode == "inference":
         inference_list = []
+        batch_num = args.data_previous + infer_step * args.data_after 
         for i in infer_num:
-            if i > len(dataset)-1 or i < -len(dataset):
-                print_log(f"Error inference num: {i}, used range: ({-len(dataset)}, {len(dataset)-1})")
+            if i < 0:
+                ii = args.data_num + i
+            else:
+                ii = i
+            if (ii + batch_num) > (args.data_num):
+                print_log(f"Error inference num: {ii}")
                 raise EOFError
-            inference_list.append(i+len(dataset) if i < 0 else i)
-        infer_dataset = Subset(dataset, inference_list)
-        infer_loader = DataLoader(infer_dataset,
+            inference_list.append(ii)
+        inference_data = dataset.inference_data(inference_list) # B, T, C, H, W
+        inference_dataset = infer_Dataset(inference_data[:, :args.data_previous],
+                                          inference_data[:, args.data_previous : args.data_after+args.data_previous])
+        infer_loader = DataLoader(inference_dataset,
                                 num_workers=args.num_workers,
-                                batch_size=args.per_device_valid_batch_size)
-        return infer_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
+                                batch_size=args.per_device_valid_batch_size,
+                                shuffle = False)
+        return inference_list, inference_data, infer_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
     
     # Split dataset into training dataset, validation dataset and test_dataset
     indices = list(range(len(dataset)))
@@ -71,13 +79,14 @@ def get_datloader(args, mode = "train", infer_num = [0]):
     test_loader = DataLoader(test_dataset,
                                 num_workers=args.num_workers,
                                 pin_memory=True,
-                                batch_size=args.per_device_valid_batch_size)
+                                batch_size=args.per_device_valid_batch_size,
+                                shuffle = False)
     return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh, dataset.jac
 
 
 class CFD_Dataset(Dataset):
     ''' Dataset for loading and preprocessing the CFD data '''
-    def __init__(self,args):
+    def __init__(self, args, infer_step = 1):
         # Read inputs
         self.data_type_num, self.height, self.width = args.data_shape
         self.data_previous = args.data_previous
@@ -87,6 +96,7 @@ class CFD_Dataset(Dataset):
         self.data_range = args.data_range
         ny_range = self.data_range[0]
         nx_range = self.data_range[1]
+        self.infer_step = infer_step  # only inference used
         self.scaler_list = []
         self.custom_length = int(self.data_num - self.data_previous - self.data_after + 1)
         # Data Standard
@@ -133,6 +143,16 @@ class CFD_Dataset(Dataset):
         del data_matrix
 
 
+    def inference_data(self, inference_list):
+        inference_data = []
+        batch_num = self.data_previous + self.infer_step * self.data_after 
+
+        for i in inference_list:
+            inference_data.append(self.data_matrix[i:i+batch_num])
+        
+        return np.array(inference_data) # B, T, C, H, W
+    
+
     def __getitem__(self, index):
         # Returns one sample at a time
         #batch: num of data_previous + num of data_after
@@ -146,6 +166,24 @@ class CFD_Dataset(Dataset):
         inputs = in_la_data[:self.data_previous]          #(data_previous, data_type, height, width)
         labels = in_la_data[self.data_previous:]          #(data_after, data_type, height, width)
         return inputs, labels
+
+
+    def __len__(self):
+        # Returns the size of the dataset
+        return self.custom_length
+    
+
+class infer_Dataset(Dataset):
+    ''' Dataset for muti_inference the CFD data '''
+    def __init__(self, inputs, labels):
+        # Read inputs
+        self.inputs = torch.Tensor(inputs) # B, T, C, H, W
+        self.labels = torch.Tensor(labels) # B, T, C, H, W
+        self.custom_length = len(inputs)
+
+
+    def __getitem__(self, index):
+        return self.inputs[index], self.labels[index]
 
 
     def __len__(self):
