@@ -3,7 +3,7 @@ import time
 import numpy as np
 from typing import Dict, List
 from fvcore.nn import FlopCountAnalysis, flop_count_table
-from DataDefine import get_datloader
+from DataDefine import get_datloader, infer_Dataset
 import torch
 from deepspeed.accelerator import get_accelerator
 from core import metric, Recorder
@@ -11,12 +11,13 @@ from methods import method_maps
 from timm.utils import AverageMeter
 from utils import (plot_figure, check_dir, print_log, weights_to_cpu,
                    measure_throughput, output_namespace)
+from torch.utils.data import DataLoader
 
 
 class modeltrain(object):
     """The basic class of PyTorch training and evaluation."""
 
-    def __init__(self, model_data, model_path, mode = "train", infer_num = [-1]):
+    def __init__(self, model_data, model_path, mode = "train", infer_num = [-1], infer_step = 1):
         """Initialize experiments (non-dist as an example)"""
         self.model_data = model_data
         self.args = model_data[0]
@@ -33,7 +34,9 @@ class modeltrain(object):
         self.model_path = model_path
         self.best_loss = 100.
         self.infer_num = infer_num
+        self.infer_step = infer_step
         self.mode = mode
+        self.inference_list = None
 
         self.preparation()
         print_log(output_namespace(self.args))
@@ -81,10 +84,12 @@ class modeltrain(object):
             if self.vali_loader is None:
                 self.vali_loader = self.test_loader
         else:
-            (self.infer_loader, 
+            (self.inference_list, 
+             self.inference_data,
+            self.infer_loader,
             self.scaler_list, 
             self.x_mesh, 
-            self.y_mesh) = get_datloader(self.args, "inference", self.infer_num)
+            self.y_mesh) = get_datloader(self.args, "inference", self.infer_num, self.infer_step)
             self.method.scaler_list = self.scaler_list
 
 
@@ -195,13 +200,11 @@ class modeltrain(object):
         epoch_time_m = AverageMeter()
         for epoch in range(self.epoch, self.max_epochs):
             begin = time.time()
-            if self.args.empty_cache:
-                torch.cuda.empty_cache()
 
             if self.dist and hasattr(self.train_loader.sampler, 'set_epoch'):
                 self.train_loader.sampler.set_epoch(epoch)
 
-            num_updates, loss_mean, eta , = self.method.train_one_epoch(self.train_loader,
+            num_updates, loss_mean, eta = self.method.train_one_epoch(self.train_loader,
                                                                       epoch, num_updates, eta)
 
             self.epoch = epoch
@@ -216,6 +219,7 @@ class modeltrain(object):
                         epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
 
             print_log(f'Epoch time: {epoch_time_m.val}s, Average time: {epoch_time_m.avg}s')
+
             if self.args.mem_log:
                 MemAllocated = round(get_accelerator().memory_allocated() / 1024**3, 2)
                 MaxMemAllocated = round(get_accelerator().max_memory_allocated() / 1024**3, 2)
@@ -230,6 +234,9 @@ class modeltrain(object):
             if epoch > self.early_stop and early_stop:  # early stop training
                 print_log('Early stop training at f{} epoch'.format(epoch))
                 break
+            
+            if self.args.empty_cache:
+                torch.cuda.empty_cache()
             print_log("")
             
         self.save_checkpoint("last_checkpoint")
@@ -256,45 +263,107 @@ class modeltrain(object):
         metric_list = self.method.metric_list
 
         # Computed
-        eval_res_av, eval_log_av = metric(results['preds'], results['trues'],
+        eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
                                     metrics=metric_list, channel_names=channel_names, mode = "Computed")
         results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
         print_log(f"{eval_log_av}")
 
         if self.rank == 0:
             for t in range(self.args.data_after):
-                self.plot_test(t, results['preds'][-1,t], results['trues'][-1,t], "Computed")
+                self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], "Computed")
 
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
 
-            for np_data in ['metrics', 'inputs', 'trues', 'preds']:
+            for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
         eval_res_av_n=""
         # Original
         if self.scaler_list:
             results_n = self.de_norm(results)
-            eval_res_av_n, eval_log = metric(results['preds'], results['trues'],
+            eval_res_av_n, eval_log_av_n = metric(results['preds'], results['labels'],
                                         self.scaler_list,
                                         metrics=metric_list, channel_names=channel_names, mode = "Original")
             results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
-            print_log(f"{eval_log}")
+            print_log(f"{eval_log_av_n}")
 
             if self.rank == 0:
                 for t in range(self.args.data_after):
-                    self.plot_test(t, results_n['preds'][-1,t], results_n['trues'][-1,t], "Original")
+                    self.plot_test(t, results_n['preds'][-1,t], results_n['labels'][-1,t], "Original")
 
                 folder_path = osp.join(self.model_path, 'saved', "Original")
                 check_dir(folder_path)
 
-                for np_data in ['metrics', 'inputs', 'trues', 'preds']:
+                for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                     np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
 
         return eval_res_av, eval_res_av_n
     
-    def muti_inference(self, num_infer):
+    def muti_inference(self, checkpoint = 'checkpoint.pth'):
         """A inference loop of methods with multistep"""
+        best_model_path = osp.join(self.checkpoints_path, checkpoint)
+        self.load_from_state_dict(torch.load(best_model_path))
+        results_step = []
+        for s in range(self.infer_step):
+            results = self.method.test_one_epoch(self.infer_loader)
+            results_step.append(results)
+            if s < self.infer_step-1:
+                inputs = np.concatenate((results['inputs'][:, self.args.data_after:], 
+                            results['preds']))
+                labels = self.inference_data[:, self.args.data_previous + (s+1)*self.args.data_after: self.args.data_previous + (s+2)*self.args.data_after]
+                inference_dataset = infer_Dataset(inputs, labels)
+                self.infer_loader = DataLoader(inference_dataset,
+                                    num_workers=self.args.num_workers,
+                                    batch_size=self.args.per_device_valid_batch_size,
+                                    shuffle = False)
+        
+
+        channel_names = self.args.data_use
+        metric_list = self.method.metric_list
+
+        # Computed
+        for s, results in enumerate(results_step):
+            eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
+                                        metrics=metric_list, channel_names=channel_names, mode = "Computed")
+            results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+            print_log(f"Step: {s}\n{eval_log_av}\n")
+
+            if self.rank == 0:
+                for t in range(self.args.data_after):
+                    self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], "Computed", dir_name = f"inference/pic/Step{s}")
+
+                folder_path = osp.join(self.model_path, "inference", "save", "Computed")
+                check_dir(folder_path)
+
+                for np_data in ['metrics', 'inputs', 'labels', 'preds']:
+                    np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
+        
+        eval_res_av_n=""
+        # Original
+        if self.scaler_list:
+            for s, results in enumerate(results_step):
+                results_n = self.de_norm(results)
+                eval_res_av_n, eval_log_av_n = metric(results['preds'], results['labels'],
+                                            self.scaler_list,
+                                            metrics=metric_list, channel_names=channel_names, mode = "Original")
+                results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
+                print_log(f"Step: {s}\n{eval_log_av_n}\n")
+
+                if self.rank == 0:
+                    for t in range(self.args.data_after):
+                        self.plot_test(t, results_n['preds'][-1,t], results_n['labels'][-1,t], "Original", dir_name = f"inference/pic/Step{s}")
+
+                    folder_path = osp.join(self.model_path, 'inference', 'saved', "Original")
+                    check_dir(folder_path)
+
+                    for np_data in ['metrics', 'inputs', 'labels', 'preds']:
+                        np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
+
+
+        results_step = np.array(results_step)
+        folder_path = osp.join(self.model_path, 'inference', 'results_step.npy')
+        np.save(folder_path, results_step)
 
 
     def inference(self):
@@ -307,7 +376,7 @@ class modeltrain(object):
         if self.rank == 0:
             folder_path = osp.join(self.model_path, 'saved')
             check_dir(folder_path)
-            for np_data in ['inputs', 'trues', 'preds']:
+            for np_data in ['inputs', 'labels', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
         return None
@@ -338,7 +407,7 @@ class modeltrain(object):
     def de_norm(self, results):
         results_ori = {}
         for name in results.keys():
-            if name in ['inputs', 'trues', 'preds'] and self.scaler_list:
+            if name in ['inputs', 'labels', 'preds'] and self.scaler_list:
                 B, T, C, H, W = results[name].shape
                 results_ori[name] = np.zeros((B, T, C, H, W))
                 for b in range(B):

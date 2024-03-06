@@ -102,7 +102,7 @@ class Base_method(object):
                     pred_y = self.predict(batch_x, batch_y)
 
                 if gather_data:  # return raw datas
-                    results.append(dict(zip(['inputs', 'preds', 'trues'],
+                    results.append(dict(zip(['inputs', 'preds', 'labels'],
                                             [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
                 else:  # return metrics
                     eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
@@ -152,7 +152,7 @@ class Base_method(object):
                     pred_y = self.predict(batch_x, batch_y)
 
                 if gather_data:  # return raw datas
-                    results.append(dict(zip(['inputs', 'preds', 'trues'],
+                    results.append(dict(zip(['inputs', 'preds', 'labels'],
                                             [batch_x.cpu().numpy(), pred_y.cpu().numpy(), batch_y.cpu().numpy()])))
                 else:  # return metrics
                     eval_res, _ = metric(pred_y.cpu().numpy(), batch_y.cpu().numpy(),
