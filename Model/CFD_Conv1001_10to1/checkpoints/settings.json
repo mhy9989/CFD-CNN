@@ -7,7 +7,7 @@
     "gradient_accumulation_steps": 1,
     "num_workers": 12,
     "method": "SAU",
-    "max_epoch": 4,
+    "max_epoch": 200,
     "lossfun": "MSE",
     "load_from": false,
     "if_continue": true,

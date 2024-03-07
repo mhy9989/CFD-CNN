@@ -8,8 +8,8 @@ def default_parser():
         "per_device_train_batch_size": 1,
         "per_device_valid_batch_size": 1,
         "num_workers": 1,
-        "method": "SimVP",
-        "max_epoch": 100,
+        "method": "SAU",
+        "max_epoch": 200,
         "lossfun": "MSE",
         "load_from": False,
         "if_continue": True,
@@ -47,10 +47,10 @@ def default_parser():
         "data_max": [1.4213101, 1.08254902, 12.95459985, 78.43348863],
         "data_min": [-0.55474735, -0.68369049, 0.77961313, 0.24014292],
         "data_scaler": "Standard",
-        "data_previous": 5,
-        "data_after": 3,
+        "data_previous": 10,
+        "data_after": 1,
         "valid_ratio": 0.1,
-        "text_num": 2
+        "text_num": 10
     },
     "optim_config": {
         "optim": "Adam",
@@ -74,7 +74,7 @@ def default_parser():
         "final_div_factor": 1e4
     },
     "model_config": {
-        "model_type": "gSTA",
+        "model_type": "sau2",
         "hid_S": 128,
         "hid_T": 1024,
         "N_S": 8,
