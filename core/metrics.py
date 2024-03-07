@@ -43,7 +43,7 @@ def SSIM(pred, label):
 
 
 def metric(pred, label, scaler_list = None, metrics=['mae', 'mse', 'mre'],
-           clip_range=[0, 1], channel_names=None, return_log=label, mode = None):
+           clip_range=[0, 1], channel_names=None, return_log=True, mode = None):
     """The evaluation function to output metrics.
 
     Args:

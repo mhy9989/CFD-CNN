@@ -1,7 +1,6 @@
 import os.path as osp
 import time
 import numpy as np
-from typing import Dict, List
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 from DataDefine import get_datloader, infer_Dataset
 import torch
@@ -149,7 +148,7 @@ class modeltrain(object):
     def display_method_info(self):
         """Plot the basic infomation of supported methods"""
         T, C, H, W = self.args.in_shape
-        if self.args.method in ['simvp', 'tau']:
+        if self.args.method in ['simvp', 'tau', 'sau']:
             input_dummy = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
         elif self.args.method == 'crevnet':
             # crevnet must use the batchsize rather than 1
@@ -218,7 +217,7 @@ class modeltrain(object):
             print_log('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}'.format(
                         epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
 
-            print_log(f'Epoch time: {epoch_time_m.val}s, Average time: {epoch_time_m.avg}s')
+            print_log(f'Epoch time: {epoch_time_m.val:.2f}s, Average time: {epoch_time_m.avg:.2f}s')
 
             if self.args.mem_log:
                 MemAllocated = round(get_accelerator().memory_allocated() / 1024**3, 2)
@@ -271,10 +270,10 @@ class modeltrain(object):
         if self.rank == 0:
             for t in range(self.args.data_after):
                 self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], "Computed")
-
+                print_log(f"after: {t}, Computed picture is saved")
+            
             folder_path = osp.join(self.model_path, 'saved', "Computed")
             check_dir(folder_path)
-
             for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
@@ -286,15 +285,15 @@ class modeltrain(object):
                                         self.scaler_list,
                                         metrics=metric_list, channel_names=channel_names, mode = "Original")
             results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
-            print_log(f"{eval_log_av_n}")
+            print_log(f"\n{eval_log_av_n}")
 
             if self.rank == 0:
                 for t in range(self.args.data_after):
                     self.plot_test(t, results_n['preds'][-1,t], results_n['labels'][-1,t], "Original")
-
+                    print_log(f"after: {t}, Original picture is saved")
+                
                 folder_path = osp.join(self.model_path, 'saved', "Original")
                 check_dir(folder_path)
-
                 for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                     np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
 
@@ -310,7 +309,7 @@ class modeltrain(object):
             results_step.append(results)
             if s < self.infer_step-1:
                 inputs = np.concatenate((results['inputs'][:, self.args.data_after:], 
-                            results['preds']))
+                            results['preds']), axis = 1)
                 labels = self.inference_data[:, self.args.data_previous + (s+1)*self.args.data_after: self.args.data_previous + (s+2)*self.args.data_after]
                 inference_dataset = infer_Dataset(inputs, labels)
                 self.infer_loader = DataLoader(inference_dataset,
@@ -327,15 +326,16 @@ class modeltrain(object):
             eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
                                         metrics=metric_list, channel_names=channel_names, mode = "Computed")
             results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
-            print_log(f"Step: {s}\n{eval_log_av}\n")
+            print_log(f"\nStep: {s}\n{eval_log_av}")
 
             if self.rank == 0:
-                for t in range(self.args.data_after):
-                    self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], "Computed", dir_name = f"inference/pic/Step{s}")
+                for b, infer in enumerate(self.inference_list):
+                    for t in range(self.args.data_after):
+                        self.plot_test(t, results['preds'][b,t], results['labels'][b,t], "Computed", dir_name = f"inference/pic/infer{infer}/Step{s}")
+                        print_log(f"infer: {b}, after: {t}, Computed picture is saved")
 
-                folder_path = osp.join(self.model_path, "inference", "save", "Computed")
+                folder_path = osp.join(self.model_path, "inference", "saved", "Computed", f"Step{s}")
                 check_dir(folder_path)
-
                 for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                     np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
         
@@ -348,13 +348,15 @@ class modeltrain(object):
                                             self.scaler_list,
                                             metrics=metric_list, channel_names=channel_names, mode = "Original")
                 results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
-                print_log(f"Step: {s}\n{eval_log_av_n}\n")
+                print_log(f"\nStep: {s}\n{eval_log_av_n}")
 
                 if self.rank == 0:
-                    for t in range(self.args.data_after):
-                        self.plot_test(t, results_n['preds'][-1,t], results_n['labels'][-1,t], "Original", dir_name = f"inference/pic/Step{s}")
+                    for b, infer in enumerate(self.inference_list):
+                        for t in range(self.args.data_after):
+                            self.plot_test(t, results_n['preds'][b,t], results_n['labels'][b,t], "Original", dir_name = f"inference/pic/infer{infer}/Step{s}")
+                            print_log(f"infer: {b}, after: {t}, Original picture is saved")
 
-                    folder_path = osp.join(self.model_path, 'inference', 'saved', "Original")
+                    folder_path = osp.join(self.model_path, 'inference', 'saved', "Original", f"Step{s}")
                     check_dir(folder_path)
 
                     for np_data in ['metrics', 'inputs', 'labels', 'preds']:
@@ -381,11 +383,12 @@ class modeltrain(object):
 
         return None
     
-    def plot_test(self, t, tures, preds, mode, 
+    def plot_test(self, t, preds, labels, mode, 
                   dpi = 300, dir_name = "pic", 
                   min_max_base = None, min_max_delt = None):
         data_select_num = self.args.data_select_num
-        pic_folder = osp.join(self.model_path, dir_name, mode, t)
+        pic_folder = osp.join(self.model_path, dir_name, mode, f"after{t}")
+        
         check_dir(pic_folder)
         
         for i in range(data_select_num):
@@ -393,14 +396,14 @@ class modeltrain(object):
             check_dir(select_pic)
 
             if min_max_base == None:
-                min_max = [tures[i].min(), tures[i].max()]
-            plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i], 
+                min_max = [labels[i].min(), labels[i].max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, labels[i], 
                              self.args.data_use[i], "label", mode, select_pic, dpi)
             plot_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
                              self.args.data_use[i], "pred", mode, select_pic, dpi)
             if min_max_delt == None:
-                min_max = [(tures[i]-preds[i]).min(), (tures[i]-preds[i]).max()]
-            plot_figure(self.x_mesh, self.y_mesh, min_max, tures[i]-preds[i], 
+                min_max = [(labels[i]-preds[i]).min(), (labels[i]-preds[i]).max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, labels[i]-preds[i], 
                              self.args.data_use[i], "delt", mode, select_pic, dpi)
         return None
     

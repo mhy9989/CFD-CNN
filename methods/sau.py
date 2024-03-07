@@ -6,20 +6,17 @@ from utils import reduce_tensor, get_progress
 from .simvp import SimVP
 from core.lossfun import diff_div_reg, GS, Regularization, GS0
 
-class TAU(SimVP):
-    r"""TAU
-
-    Implementation of `Temporal Attention Unit: Towards Efficient Spatiotemporal 
-    Predictive Learning <https://arxiv.org/abs/2206.12126>`_.
-
-    """
+class SAU(SimVP):
 
     def __init__(self, model_data):
         SimVP.__init__(self, model_data)
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss = self.base_criterion(pred_y, batch_y)
+        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y) + 0.1 * GS(pred_y, batch_y, self.jac, mode = "CD4")
+        if self.args.regularization > 0:
+            reg_loss = self.reg(self.model)
+            loss += reg_loss
         return loss
     
     def train_one_epoch(self, train_loader, epoch, num_updates, eta=None, **kwargs):
@@ -30,6 +27,9 @@ class TAU(SimVP):
         log_buffer = "Training..."
         progress = get_progress()
         
+        if self.args.regularization > 0:
+            self.reg=Regularization(self.model, self.args.regularization, p=2, dist=self.dist).to(self.device)
+
         end = time.time()
         with progress:
             if self.rank == 0:

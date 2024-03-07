@@ -13,18 +13,23 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     """Generate dataloader"""
     dataset = CFD_Dataset(args, infer_step)
     data_scaler_list = [dataset.scaler_list[i] for i in args.data_select] if dataset.scaler_list else None
-    print_log(f"Length of all dataset: {len(dataset)}")
    
     if mode == "inference":
         inference_list = []
-        batch_num = args.data_previous + infer_step * args.data_after 
+        data_after_num = infer_step * args.data_after 
         for i in infer_num:
             if i < 0:
                 ii = args.data_num + i
             else:
                 ii = i
-            if (ii + batch_num) > (args.data_num):
-                print_log(f"Error inference num: {ii}")
+            if (ii + data_after_num) > (args.data_num) or ii < args.data_previous:
+                print_log(f"Error inference num: {i}")
+                print_log('Available num for the inference: [{}, {}], [{}, {}]'.format(
+                args.data_previous,
+                args.data_num-data_after_num,
+                -args.data_num+args.data_previous,
+                -data_after_num
+                ))
                 raise EOFError
             inference_list.append(ii)
         inference_data = dataset.inference_data(inference_list) # B, T, C, H, W
@@ -34,10 +39,18 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
                                 num_workers=args.num_workers,
                                 batch_size=args.per_device_valid_batch_size,
                                 shuffle = False)
+        print_log(f"Length of inference_dataset: {len(inference_dataset)}")
+        print_log(f"Shape of input_data: {inference_dataset[0][0].shape}")
+        print_log(f"Shape of label_data: {inference_dataset[0][1].shape}")
         return inference_list, inference_data, infer_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh
     
     # Split dataset into training dataset, validation dataset and test_dataset
     indices = list(range(len(dataset)))
+
+    if args.text_num > len(dataset) -1:
+        print_log(f"Too many text_num choose!")
+        raise EOFError
+
     indices_train_valid = indices[:-args.text_num]
     indices_test = indices[-args.text_num:]
 
@@ -48,7 +61,7 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     lengths = [trainlen, len(train_valid_dataset) - trainlen]
     train_dataset, valid_dataset = random_split(train_valid_dataset, lengths)
 
-    print_log(f"Length of input dataset: {len(dataset)}")
+    print_log(f"Length of all dataset: {len(dataset)}")
     print_log(f"Length of train_dataset: {len(train_dataset)}")
     print_log(f"Length of valid_dataset: {len(valid_dataset)}")
     print_log(f"Length of test_dataset: {len(valid_dataset)}")
@@ -145,10 +158,11 @@ class CFD_Dataset(Dataset):
 
     def inference_data(self, inference_list):
         inference_data = []
-        batch_num = self.data_previous + self.infer_step * self.data_after 
+        data_after_num = self.infer_step * self.data_after 
 
         for i in inference_list:
-            inference_data.append(self.data_matrix[i:i+batch_num])
+            print(i-self.data_previous, i+data_after_num)
+            inference_data.append(self.data_matrix[i-self.data_previous:i+data_after_num])
         
         return np.array(inference_data) # B, T, C, H, W
     

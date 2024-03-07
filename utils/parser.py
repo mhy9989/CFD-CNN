@@ -48,9 +48,9 @@ def default_parser():
         "data_min": [-0.55474735, -0.68369049, 0.77961313, 0.24014292],
         "data_scaler": "Standard",
         "data_previous": 5,
-        "data_after": 1,
+        "data_after": 3,
         "valid_ratio": 0.1,
-        "text_num": 50
+        "text_num": 2
     },
     "optim_config": {
         "optim": "Adam",

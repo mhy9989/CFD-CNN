@@ -10,6 +10,7 @@
 # from .predrnnv2 import PredRNNv2
 from .simvp import SimVP
 from .tau import TAU
+from .sau import SAU
 # from .dmvfn import DMVFN
 
 method_maps = {
@@ -25,6 +26,7 @@ method_maps = {
     # 'predrnnv2': PredRNNv2,
     'simvp': SimVP,
     'tau': TAU,
+    'sau': SAU,
     # 'dmvfn': DMVFN
 }
 
