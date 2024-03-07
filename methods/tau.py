@@ -4,7 +4,7 @@ from timm.utils import AverageMeter
 
 from utils import reduce_tensor, get_progress
 from .simvp import SimVP
-from core.lossfun import diff_div_reg, GS, Regularization, GS0
+from core.lossfun import diff_div_reg
 
 class TAU(SimVP):
     r"""TAU
@@ -19,7 +19,7 @@ class TAU(SimVP):
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss = self.base_criterion(pred_y, batch_y)
+        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)
         return loss
     
     def train_one_epoch(self, train_loader, epoch, num_updates, eta=None, **kwargs):
