@@ -9,7 +9,11 @@ from matplotlib import rcParams
 from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 config = {
     "font.family":'Times New Roman',
-    "axes.unicode_minus": False 
+    "font.size": 13,
+    "mathtext.fontset": 'stix',
+    "mathtext.rm": 'Times New Roman',
+    "mathtext.it": 'Times New Roman:italic',
+    "mathtext.bf": 'Times New Roman:bold'
 }
 rcParams.update(config)
 
@@ -28,13 +32,12 @@ def plot_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic
     plt.colorbar(map,fraction=0.02, pad=0.03,
                     ticks=np.linspace(min_max[0], min_max[1], 5),
                     format = '%.1e')
-    plt.title(f"{mode} {data_name} data of type {data_select}")
+    plt.title(f"{mode} {data_name} data of type {data_select}", fontsize=15)
     
-    plt.xlabel(r'$\mathit{X}/mm$')
-    plt.ylabel(r'$\textit{Y}/mm$')
+    plt.xlabel('$\mathit{X}$/mm', fontsize=15)
+    plt.ylabel('$\mathit{Y}$/mm', fontsize=15)
     pic_path = osp.join(pic_folder, pic_name)
     plt.savefig(pic_path, dpi=dpi, bbox_inches='tight')
-    print_log(f'{data_select}_{mode}_{data_name} picture is saved')
     plt.close()
 
 def plot_learning_curve(loss_record, model_path, dpi=300, title='', dir_name = "pic"):
@@ -44,9 +47,9 @@ def plot_learning_curve(loss_record, model_path, dpi=300, title='', dir_name = "
     x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
     plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
     plt.semilogy(x_1, loss_record['train_loss'], c='tab:red', label='train')
-    plt.xlabel('Training steps')
-    plt.ylabel('Loss')
-    plt.title('Learning curve of {}'.format(title))
+    plt.xlabel('Training steps', fontsize=15)
+    plt.ylabel('Loss', fontsize=15)
+    plt.title('Learning curve of {}'.format(title), fontsize=15)
     plt.legend()
 
     pic_name = f'loss_record.png'

@@ -23,6 +23,7 @@ model_maps = {
     # 'predrnnv2': PredRNNv2,
     'simvp': SimVP_Model,
     'tau': SimVP_Model,
+    'sau': SimVP_Model,
     # 'dmvfn': DMVFN
 }
 
