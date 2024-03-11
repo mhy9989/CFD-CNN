@@ -1,53 +1,61 @@
 import time
 import torch
 from timm.utils import AverageMeter
-
-from utils import reduce_tensor, get_progress
+from models import PredRNN_Model
+from utils import (reduce_tensor, reshape_patch, reshape_patch_back,
+                           reserve_schedule_sampling_exp, schedule_sampling, get_progress)
 from .base_method import Base_method
-from models import SimVP_Model
 
-class SimVP(Base_method):
-    r"""SimVP
 
-    Implementation of `SimVP: Simpler yet Better Video Prediction
-    <https://arxiv.org/abs/2206.05099>`_.
+class PredRNN(Base_method):
+    r"""PredRNN
+
+    Implementation of `PredRNN: A Recurrent Neural Network for Spatiotemporal
+    Predictive Learning <https://dl.acm.org/doi/abs/10.5555/3294771.3294855>`_.
 
     """
 
     def __init__(self, args, ds_config, base_criterion):
         Base_method.__init__(self, args, ds_config, base_criterion)
-        self.model = self.build_model(args)
+        self.model = self.build_model(self.args)
 
     def build_model(self, args):
-        return SimVP_Model(**args).to(self.device)
+        num_hidden = self.args.num_hidden
+        return PredRNN_Model(num_hidden, args).to(self.device)
     
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
         loss = self.base_criterion(pred_y, batch_y)
         return loss
 
-    def predict(self, batch_x, batch_y=None, **kwargs):
+    def predict(self, batch_x, batch_y, **kwargs):
         """Forward the model"""
-        if self.args.data_after == self.args.data_previous:
-            pred_y = self.model(batch_x)
-        elif self.args.data_after < self.args.data_previous:
-            pred_y = self.model(batch_x)
-            pred_y = pred_y[:, :self.args.data_after]
-        elif self.args.data_after > self.args.data_previous:
-            pred_y = []
-            d = self.args.data_after // self.args.data_previous
-            m = self.args.data_after % self.args.data_previous
-            
-            cur_seq = batch_x.clone()
-            for _ in range(d):
-                cur_seq = self.model(cur_seq)
-                pred_y.append(cur_seq)
+        # reverse schedule sampling
+        if self.args.reverse_scheduled_sampling == 1:
+            mask_input = 1
+        else:
+            mask_input = self.args.data_previous
+        _, img_channel, img_height, img_width = self.args.in_shape
 
-            if m != 0:
-                cur_seq = self.model(cur_seq)
-                pred_y.append(cur_seq[:, :m])
+        # preprocess
+        test_ims = torch.cat([batch_x, batch_y], dim=1).permute(0, 1, 3, 4, 2).contiguous()
+        test_dat = reshape_patch(test_ims, self.args.patch_size)
+        test_ims = test_ims[:, :, :, :, :img_channel]
+
+        real_input_flag = torch.zeros(
+            (batch_x.shape[0],
+            self.args.total_length - mask_input - 1,
+            img_height // self.args.patch_size,
+            img_width // self.args.patch_size,
+            self.args.patch_size ** 2 * img_channel)).to(self.device)
             
-            pred_y = torch.cat(pred_y, dim=1)
+        if self.args.reverse_scheduled_sampling == 1:
+            real_input_flag[:, :self.args.data_previous - 1, :, :] = 1.0
+
+        img_gen = self.model(test_dat, real_input_flag)
+        img_gen = reshape_patch_back(img_gen, self.args.patch_size)
+        pred_y = img_gen[:, -self.args.data_after:].permute(0, 1, 4, 2, 3).contiguous()
+
         return pred_y
 
     def train_one_epoch(self, train_loader, epoch, num_updates, eta=None, **kwargs):
@@ -70,8 +78,18 @@ class SimVP(Base_method):
 
                 batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
 
-                pred_y = self.predict(batch_x)
-                loss = self.cal_loss(pred_y, batch_y)
+                # preprocess
+                ims = torch.cat([batch_x, batch_y], dim=1).permute(0, 1, 3, 4, 2).contiguous()
+                ims = reshape_patch(ims, self.args.patch_size)
+                if self.args.reverse_scheduled_sampling == 1:
+                    real_input_flag = reserve_schedule_sampling_exp(
+                        num_updates, ims.shape[0], self.args)
+                else:
+                    eta, real_input_flag = schedule_sampling(
+                        eta, num_updates, ims.shape[0], self.args)
+
+                img_gen = self.model(ims, real_input_flag)
+                loss = self.cal_loss(img_gen, ims[:, 1:])
 
                 if not self.dist:
                     loss.backward()
@@ -97,7 +115,7 @@ class SimVP(Base_method):
                     progress.update(train_pbar, advance=1)#, description=f"{log_buffer}")
 
                 end = time.time()  # end for
-        
+
         if self.by_epoch:
             self.scheduler.step(epoch)
 
@@ -105,3 +123,4 @@ class SimVP(Base_method):
             self.optimizer.sync_lookahead()
 
         return num_updates, losses_m, eta
+

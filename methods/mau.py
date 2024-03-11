@@ -1,32 +1,53 @@
 import time
 import torch
+import torch.nn as nn
 from timm.utils import AverageMeter
+from tqdm import tqdm
 
-from utils import reduce_tensor, get_progress
-from .simvp import SimVP
-from models import SimVP_Model
-from core.lossfun import diff_div_reg
+from models import MAU_Model
+from utils import reduce_tensor, schedule_sampling, get_progress
+from .base_method import Base_method
 
-class TAU(SimVP):
-    r"""TAU
 
-    Implementation of `Temporal Attention Unit: Towards Efficient Spatiotemporal 
-    Predictive Learning <https://arxiv.org/abs/2206.12126>`_.
+class MAU(Base_method):
+    r"""MAU
+
+    Implementation of `MAU: A Motion-Aware Unit for Video Prediction and Beyond
+    <https://openreview.net/forum?id=qwtfY-3ibt7>`_.
 
     """
 
     def __init__(self, args, ds_config, base_criterion):
-        SimVP.__init__(self, args, ds_config, base_criterion)
-        self.model = self.build_model(args)
+        Base_method.__init__(self, args, ds_config, base_criterion)
+        self.model = self.build_model(self.args)
 
     def build_model(self, args):
-        return SimVP_Model(**args).to(self.device)
+        num_hidden = self.args.num_hidden
+        return MAU_Model(num_hidden, args).to(self.device)
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)
+        loss = self.base_criterion(pred_y, batch_y)
         return loss
-    
+
+    def predict(self, batch_x, batch_y, **kwargs):
+        """Forward the model."""
+        _, img_channel, img_height, img_width = self.args.in_shape
+
+        # preprocess
+        test_ims = torch.cat([batch_x, batch_y], dim=1).permute(0, 1, 3, 4, 2).contiguous()
+        real_input_flag = torch.zeros(
+            (batch_x.shape[0],
+            self.args.total_length - self.args.data_previous - 1,
+            img_height // self.args.patch_size,
+            img_width // self.args.patch_size,
+            self.args.patch_size ** 2 * img_channel)).to(self.device)
+
+        img_gen = self.model(test_ims, real_input_flag)
+        pred_y = img_gen[:, -self.args.data_after:, :]
+
+        return pred_y
+
     def train_one_epoch(self, train_loader, epoch, num_updates, eta=None, **kwargs):
         """Train the model with train_loader."""
         data_time_m = AverageMeter()
@@ -39,7 +60,7 @@ class TAU(SimVP):
         with progress:
             if self.rank == 0:
                 train_pbar = progress.add_task(description=log_buffer, total=len(train_loader))
-            
+           
             for batch_x, batch_y in train_loader:
                 data_time_m.update(time.time() - end)
                 if self.by_epoch or not self.dist:
@@ -47,8 +68,12 @@ class TAU(SimVP):
 
                 batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
 
-                pred_y = self.predict(batch_x)
-                loss = self.cal_loss(pred_y, batch_y)
+                # preprocess
+                ims = torch.cat([batch_x, batch_y], dim=1).permute(0, 1, 3, 4, 2).contiguous()
+                eta, real_input_flag = schedule_sampling(eta, num_updates, ims.shape[0], self.args)
+
+                img_gen = self.model(ims, real_input_flag)
+                loss = self.cal_loss(img_gen, ims.permute(0, 1, 4, 2, 3).contiguous()[:, 1:])
 
                 if not self.dist:
                     loss.backward()
@@ -74,7 +99,7 @@ class TAU(SimVP):
                     progress.update(train_pbar, advance=1)#, description=f"{log_buffer}")
 
                 end = time.time()  # end for
-        
+
         if self.by_epoch:
             self.scheduler.step(epoch)
 

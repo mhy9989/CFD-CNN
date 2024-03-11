@@ -6,7 +6,6 @@ from DataDefine import get_datloader, infer_Dataset
 import torch
 from deepspeed.accelerator import get_accelerator
 from core import metric, Recorder
-from methods import method_maps
 from timm.utils import AverageMeter
 from utils import (plot_figure, check_dir, print_log, weights_to_cpu,
                    measure_throughput, output_namespace)
@@ -18,10 +17,9 @@ class modeltrain(object):
 
     def __init__(self, model_data, model_path, mode = "train", infer_num = [-1], infer_step = 1):
         """Initialize experiments (non-dist as an example)"""
-        self.model_data = model_data
         self.args = model_data[0]
         self.device = self.args.device
-        self.method = None
+        self.method = model_data[1]
         self.args.method = self.args.method.lower()
         self.epoch = 0
         self.max_epochs = self.args.max_epoch
@@ -49,8 +47,6 @@ class modeltrain(object):
             self.early_stop = self.max_epochs * 2
 
         self.checkpoints_path = osp.join(self.model_path, 'checkpoints')
-        # build the method
-        self.build_method()
         # load checkpoint
         if self.args.load_from and self.mode == "train":
             if self.args.load_from == True:
@@ -58,14 +54,6 @@ class modeltrain(object):
             self.load(name=self.args.load_from)
         # prepare data
         self.get_data()
-
-
-    def build_method(self):
-        self.method = method_maps[self.args.method.lower()](self.model_data)
-        self.method.model.eval()
-        # setup ddp training
-        if self.dist:
-            self.method.init_distributed()
 
 
     def get_data(self):
@@ -158,12 +146,12 @@ class modeltrain(object):
             _tmp_input2 = torch.ones(1, self.args.data_after, C, H, W).to(self.device)
             _tmp_constraints = torch.zeros((49, 7, 7)).to(self.device)
             input_dummy = (_tmp_input1, _tmp_input2, _tmp_constraints)
-        # elif self.args.method in ['convlstm', 'predrnnpp', 'predrnn', 'mim', 'e3dlstm', 'mau']:
-        #     Hp, Wp = H // self.args.patch_size, W // self.args.patch_size
-        #     Cp = self.args.patch_size ** 2 * C
-        #     _tmp_input = torch.ones(1, self.args.total_length, Hp, Wp, Cp).to(self.device)
-        #     _tmp_flag = torch.ones(1, self.args.data_after - 1, Hp, Wp, Cp).to(self.device)
-        #     input_dummy = (_tmp_input, _tmp_flag)
+        elif self.args.method in ['convlstm', 'predrnnpp', 'predrnn', 'mim', 'e3dlstm', 'mau']:
+            Hp, Wp = H // self.args.patch_size, W // self.args.patch_size
+            Cp = self.args.patch_size ** 2 * C
+            _tmp_input = torch.ones(1, self.args.total_length, Hp, Wp, Cp).to(self.device)
+            _tmp_flag = torch.ones(1, self.args.data_after - 1, Hp, Wp, Cp).to(self.device)
+            input_dummy = (_tmp_input, _tmp_flag)
         # elif self.args.method == 'predrnnv2':
         #     Hp, Wp = H // self.args.patch_size, W // self.args.patch_size
         #     Cp = self.args.patch_size ** 2 * C

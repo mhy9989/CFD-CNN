@@ -4,12 +4,17 @@ from timm.utils import AverageMeter
 
 from utils import reduce_tensor, get_progress
 from .simvp import SimVP
+from models import SimVP_Model
 from core.lossfun import diff_div_reg, GS, Regularization, GS0
 
 class SAU(SimVP):
 
-    def __init__(self, model_data):
-        SimVP.__init__(self, model_data)
+    def __init__(self, args, ds_config, base_criterion):
+        SimVP.__init__(self, args, ds_config, base_criterion)
+        self.model = self.build_model(args)
+
+    def build_model(self, args):
+        return SimVP_Model(**args).to(self.device)
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
