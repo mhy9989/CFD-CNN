@@ -13,13 +13,13 @@ class MAU_Model(nn.Module):
 
     """
 
-    def __init__(self, num_layers, num_hidden, configs, **kwargs):
+    def __init__(self, num_hidden, configs, **kwargs):
         super(MAU_Model, self).__init__()
         T, C, H, W = configs.in_shape
         
         self.configs = configs
         self.frame_channel = configs.patch_size * configs.patch_size * C
-        self.num_layers = num_layers
+        self.num_layers = len(num_hidden)
         self.num_hidden = num_hidden
         self.tau = configs.tau
         self.cell_mode = configs.cell_mode
@@ -32,7 +32,7 @@ class MAU_Model(nn.Module):
         height = H // configs.patch_size // configs.sr_size
         self.MSE_criterion = nn.MSELoss()
 
-        for i in range(num_layers):
+        for i in range(self.num_layers):
             in_channel = num_hidden[i - 1]
             cell_list.append(
                 MAUCell(in_channel, num_hidden[i], height, width, configs.filter_size,
@@ -113,7 +113,6 @@ class MAU_Model(nn.Module):
         batch_size = frames.shape[0]
         height = frames.shape[3] // self.configs.sr_size
         width = frames.shape[4] // self.configs.sr_size
-        frame_channels = frames.shape[2]
         next_frames = []
         T_t = []
         T_pre = []
@@ -135,10 +134,10 @@ class MAU_Model(nn.Module):
             S_pre.append(tmp_s)
 
         for t in range(self.configs.total_length - 1):
-            if t < self.configs.pre_seq_length:
+            if t < self.configs.data_previous:
                 net = frames[:, t]
             else:
-                time_diff = t - self.configs.pre_seq_length
+                time_diff = t - self.configs.data_previous
                 net = mask_true[:, time_diff] * frames[:, t] + (1 - mask_true[:, time_diff]) * x_gen
             frames_feature = net
             frames_feature_encoded = []
@@ -171,9 +170,5 @@ class MAU_Model(nn.Module):
         
         # [length, batch, channel, height, width] -> [batch, length, height, width, channel]
         next_frames = torch.stack(next_frames, dim=0).permute(1, 0, 2, 3, 4).contiguous()
-        if kwargs.get('return_loss', True):
-            loss = self.MSE_criterion(next_frames, frames[:, 1:])
-        else:
-            loss = None
 
-        return next_frames, loss
+        return next_frames

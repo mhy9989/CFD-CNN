@@ -15,8 +15,8 @@ class PhyDNet_Model(nn.Module):
 
     def __init__(self, configs, **kwargs):
         super(PhyDNet_Model, self).__init__()
-        self.pre_seq_length = configs.pre_seq_length
-        self.aft_seq_length = configs.aft_seq_length
+        self.data_previous = configs.data_previous
+        self.data_after = configs.data_after
         _, C, H, W = configs.in_shape
         patch_size = configs.patch_size if configs.patch_size in [2, 4] else 4
         input_shape = (H // patch_size, W // patch_size)
@@ -33,13 +33,13 @@ class PhyDNet_Model(nn.Module):
 
     def forward(self, input_tensor, target_tensor, constraints, teacher_forcing_ratio=0.0):
         loss = 0
-        for ei in range(self.pre_seq_length - 1):
+        for ei in range(self.data_previous - 1):
             _, _, output_image, _, _ = self.encoder(input_tensor[:,ei,:,:,:], (ei==0))
             loss += self.criterion(output_image, input_tensor[:,ei+1,:,:,:])
 
         decoder_input = input_tensor[:,-1,:,:,:]
         use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-        for di in range(self.aft_seq_length):
+        for di in range(self.data_after):
             _, _, output_image, _, _ = self.encoder(decoder_input)
             target = target_tensor[:,di,:,:,:]
             loss += self.criterion(output_image, target)
@@ -58,7 +58,7 @@ class PhyDNet_Model(nn.Module):
     def inference(self, input_tensor, target_tensor, constraints, **kwargs):
         with torch.no_grad():
             loss = 0
-            for ei in range(self.pre_seq_length - 1):
+            for ei in range(self.data_previous - 1):
                 encoder_output, encoder_hidden, output_image, _, _  = \
                     self.encoder(input_tensor[:,ei,:,:,:], (ei==0))
                 if kwargs.get('return_loss', True):
@@ -67,7 +67,7 @@ class PhyDNet_Model(nn.Module):
             decoder_input = input_tensor[:,-1,:,:,:]
             predictions = []
 
-            for di in range(self.aft_seq_length):
+            for di in range(self.data_after):
                 _, _, output_image, _, _ = self.encoder(decoder_input, False, False)
                 decoder_input = output_image
                 predictions.append(output_image)

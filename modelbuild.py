@@ -8,11 +8,11 @@ from utils.utils import print_log, json2Parser, init_random_seed, set_seed, get_
 from utils.ds_utils import get_train_ds_config
 from core.optim_scheduler import get_optim_scheduler
 import core.lossfun as lossfun
+from methods import method_maps
 import time
 import logging
 from utils.parser import default_parser
-from models import model_maps
-from easydict import EasyDict as edict
+
 
 
 class modelbuild():
@@ -20,28 +20,32 @@ class modelbuild():
         self.mode = mode
         self.model_path = model_path
         self.set_config(ds_args)
-        self.build_model()
-        self.init_optimizer()
-        self.init_lossfun()
+        self.build_method()
 
 
     def get_data(self):
-        return self.args, self.ds_config, self.net, self.optimizer, self.scheduler, self.base_criterion
+        return self.args, self.method
 
 
-    def build_model(self):
-        """Create a neural network."""
-        model_config = edict(self.args.model_config)
-        model_config.in_shape = self.args.in_shape
-        net = model_maps[self.args.method.lower()]
-        self.net = net(**model_config).to(self.args.device)
-        print_log(f"The neural network is created. Network type: {self.args.method.lower()}({self.args.model_type})")
+    def build_method(self):
+        self.init_lossfun()
+        self.method = method_maps[self.args.method.lower()](self.args, self.ds_config, self.base_criterion)
+        network = f"The neural network is created. Network type: {self.args.method.lower()}"
+        if self.args.method.lower() == "simvp":
+            network += f"({self.args.model_type})"
+        print_log(network)
+        self.init_optimizer()
+        self.args.by_epoch = self.method.by_epoch
+        self.method.model.eval()
+        # setup ddp training
+        if self.args.dist:
+            self.method.init_distributed()
 
 
     def init_optimizer(self):
         """Create optimizer and scheduler."""
-        (self.optimizer, self.scheduler, self.args.by_epoch) \
-            = get_optim_scheduler(self.args, self.args.max_epoch, self.net, self.args.steps_per_epoch)
+        (self.method.optimizer, self.method.scheduler, self.method.by_epoch) \
+            = get_optim_scheduler(self.args, self.args.max_epoch, self.method.model, self.args.steps_per_epoch)
         print_log(f"The optimizer is created. Optimizer type: {self.args.optim}")
         print_log(f"The scheduler is created. Scheduler type: {self.args.sched}")
     

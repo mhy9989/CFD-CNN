@@ -16,16 +16,15 @@ class Base_method(object):
 
     """
 
-    def __init__(self, model_data):
+    def __init__(self, args, ds_config, base_criterion):
         super(Base_method, self).__init__()
-
-        (self.args,
-         self.ds_config,
-         self.model,
-         self.optimizer,
-         self.scheduler,
-         self.base_criterion
-        ) = model_data
+        
+        self.args = args
+        self.ds_config = ds_config
+        self.base_criterion = base_criterion
+        self.optimizer = None
+        self.scheduler = None
+        self.by_epoch = None
 
         self.dist = self.args.dist
         self.device = self.args.device
@@ -37,6 +36,8 @@ class Base_method(object):
         # setup metrics
         self.metric_list = [metric.lower() for metric in self.args.metrics]
 
+    def build_model(self, **kwargs):
+        raise NotImplementedError
 
     def init_distributed(self):
         """Initialize DeepSpeed training"""

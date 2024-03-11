@@ -21,7 +21,7 @@
   "data_config": {
     "data_path": "../flow2d-t-1001/CFD_data.npy",
     "mesh_path": "../flow2d-t-1001/CFD_mesh.npy",
-    "data_num": 1001,
+    "data_num": 1000,
     "data_type": ["u", "v", "T", "P"],
     "data_select": [2],
     "data_width": 1181,

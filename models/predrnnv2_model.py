@@ -80,11 +80,11 @@ class PredRNNv2_Model(nn.Module):
                     net = mask_true[:, t - 1] * frames[:, t] + (1 - mask_true[:, t - 1]) * x_gen
             else:
                 # schedule sampling
-                if t < self.configs.pre_seq_length:
+                if t < self.configs.data_previous:
                     net = frames[:, t]
                 else:
-                    net = mask_true[:, t - self.configs.pre_seq_length] * frames[:, t] + \
-                          (1 - mask_true[:, t - self.configs.pre_seq_length]) * x_gen
+                    net = mask_true[:, t - self.configs.data_previous] * frames[:, t] + \
+                          (1 - mask_true[:, t - self.configs.data_previous]) * x_gen
 
             h_t[0], c_t[0], memory, delta_c, delta_m = \
                 self.cell_list[0](net, h_t[0], c_t[0], memory)

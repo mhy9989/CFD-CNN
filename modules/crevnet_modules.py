@@ -146,8 +146,8 @@ class autoencoder(nn.Module):
             self.first = False
         return block_list
 
-    def forward(self, input, is_predict = True):
-        if is_predict:
+    def forward(self, input, ispredict = True):
+        if ispredict:
             n = self.in_ch // 2
             if self.init_ds != 0:
                 x = self.init_psi.forward(input)
@@ -231,10 +231,10 @@ class STConvLSTMCell(nn.Module):
         return (hidden, cell),memo
 
 
-class zig_rev_predictor(nn.Module):
+class zig_revpredictor(nn.Module):
 
     def __init__(self, input_size, hidden_size, output_size, n_layers, batch_size, temp =3, w =8,h = 8):
-        super(zig_rev_predictor, self).__init__()
+        super(zig_revpredictor, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size

@@ -1,5 +1,5 @@
 from .convlstm_modules import ConvLSTMCell
-from .crevnet_modules import zig_rev_predictor, autoencoder
+from .crevnet_modules import zig_revpredictor, autoencoder
 from .e3dlstm_modules import Eidetic3DLSTMCell, tf_Conv3d
 from .mim_modules import MIMBlock, MIMN
 from .mau_modules import MAUCell
@@ -17,7 +17,7 @@ from .dmvfn_modules import Routing, MVFB, RoundSTE, warp
 
 __all__ = [
     'ConvLSTMCell', 'CausalLSTMCell', 'GHU', 'SpatioTemporalLSTMCell', 'SpatioTemporalLSTMCellv2',
-    'MIMBlock', 'MIMN', 'Eidetic3DLSTMCell', 'tf_Conv3d', 'zig_rev_predictor', 'autoencoder',
+    'MIMBlock', 'MIMN', 'Eidetic3DLSTMCell', 'tf_Conv3d', 'zig_revpredictor', 'autoencoder',
     'PhyCell', 'PhyD_ConvLSTM', 'PhyD_EncoderRNN', 'PredNetConvLSTMCell', 'K2M', 'MAUCell',
     'BasicConv2d', 'ConvSC', 'GroupConv2d',
     'ConvNeXtSubBlock', 'ConvMixerSubBlock', 'GASubBlock', 'gInception_ST',

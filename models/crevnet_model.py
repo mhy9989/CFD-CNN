@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 
-from modules import zig_rev_predictor, autoencoder
+from modules import zig_revpredictor, autoencoder
 
 
 class CrevNet_Model(nn.Module):
@@ -15,15 +15,15 @@ class CrevNet_Model(nn.Module):
     """
 
     def __init__(self, in_shape, rnn_size, batch_size, predictor_rnn_layers,
-                 pre_seq_length, aft_seq_length, n_eval, **kwargs):
+                 data_previous, data_after, n_eval, **kwargs):
         super(CrevNet_Model, self).__init__()
         T, channels, image_height, image_width = in_shape
         self.rnn_size = rnn_size
         self.n_eval = n_eval
-        self.pre_seq_length = pre_seq_length
-        self.aft_seq_length = aft_seq_length
+        self.data_previous = data_previous
+        self.data_after = data_after
 
-        self.frame_predictor = zig_rev_predictor(
+        self.framepredictor = zig_revpredictor(
             rnn_size, rnn_size, rnn_size, predictor_rnn_layers, batch_size)
 
         self.encoder = autoencoder(nBlocks=[4,5,3], nStrides=[1, 2, 2],
@@ -44,12 +44,12 @@ class CrevNet_Model(nn.Module):
             input.append(torch.cat((k1,k2,k3), 2))
 
         loss = 0
-        self.frame_predictor.hidden = self.frame_predictor.init_hidden()
+        self.framepredictor.hidden = self.framepredictor.init_hidden()
         memo = Variable(torch.zeros(B, self.rnn_size, 3, H // 8, W // 8).cuda())
-        for i in range(1, self.pre_seq_length + self.aft_seq_length):
+        for i in range(1, self.data_previous + self.data_after):
             h = self.encoder(input[i - 1], True)
             try:
-                h_pred, memo = self.frame_predictor((h, memo))
+                h_pred, memo = self.framepredictor((h, memo))
             except RuntimeError:
                 assert False and "CrevNet Model requires `batch_size` == `val_batch_size`"
             x_pred = self.encoder(h_pred, False)
@@ -60,17 +60,17 @@ class CrevNet_Model(nn.Module):
             return loss
         else:
             gen_seq = []
-            self.frame_predictor.hidden = self.frame_predictor.init_hidden()
+            self.framepredictor.hidden = self.framepredictor.init_hidden()
             memo = torch.zeros(B, self.rnn_size, 3, H // 8, W // 8).cuda()
-            x_in = input[self.pre_seq_length-1]
-            for i in range(self.pre_seq_length, self.n_eval):
+            x_in = input[self.data_previous-1]
+            for i in range(self.data_previous, self.n_eval):
                 h = self.encoder(x_in)
-                h_pred, memo = self.frame_predictor((h, memo))
-                if i == self.pre_seq_length:
+                h_pred, memo = self.framepredictor((h, memo))
+                if i == self.data_previous:
                     x_in = self.encoder(h_pred, False).detach()
                     x_in[:, :, 0] = input[i][:, :, 0]
                     x_in[:, :, 1] = input[i][:, :, 1]
-                elif i == self.pre_seq_length + 1:
+                elif i == self.data_previous + 1:
                     x_in = self.encoder(h_pred, False).detach()
                     x_in[:, :, 0] = input[i][:, :, 0]
                 else:
