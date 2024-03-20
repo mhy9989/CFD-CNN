@@ -15,8 +15,8 @@
 - `tools/` contains the font files `tool/font/`, pre-processing file `tool/pre-data.py`and standardized file `tool/comput_norm.py`
 - `utils/` contains a variety of utilities for model training, model modules, plots, parsers, etc.
 - `DataDefine.py` is used to get the flow field dataset and make a dataloader.
-- `modelbuild.py ` is used to build and initialize the model.
-- `modeltrain.py ` is used to train, validate, test and inference about model.
+- `modelbuild.py` is used to build and initialize the model.
+- `modeltrain.py` is used to train, validate, test and inference about model.
 - `main.py` is the main function that runs the program.
 - `inference.py` is used for model inference.
 - `test.py` is used for model test.
