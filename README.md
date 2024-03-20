@@ -12,7 +12,7 @@
 - `models`/ contains the main network architectures of various video prediction methods.
 - `modules/` contains network modules and layers.
 - `runfiles/` contains various startup scripts.
-- `tools/` contains the font files `tool/font/`, pre-processing file `tool/pre-data.py`and standardized file `tool/comput_norm.py`
+- `tool/` contains the font files `tool/font/`, pre-processing file `tool/pre-data.py`and standardized file `tool/comput_norm.py`
 - `utils/` contains a variety of utilities for model training, model modules, plots, parsers, etc.
 - `DataDefine.py` is used to get the flow field dataset and make a dataloader.
 - `modelbuild.py` is used to build and initialize the model.
