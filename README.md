@@ -31,16 +31,22 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 
 - **Overview architecture**
 
-<img src="E:\git\CFD-CNN\fig\overview_architecture.png" style="zoom:10%;" />
+<img src=".\overview_architecture.jpg" style="zoom:10%;" />
 
 - **MSTA Block**
-
-<img src=".\fig\MSTA_Block.png" style="zoom: 10%;" />
+- 
+<p align="center" width="100%">
+<img src=".\fig\MSTA_Block.png" width="20%" />
+</p>
 
 - **MSTA Layer**
 
-<img src=".\fig\MSTA_flow_chart.png" style="zoom:10%;" />
+<p align="center" width="100%">
+<img src=".\fig\MSTA_flow_chart.jpg" width="20%" />
+</p>
 
 - **Large Kernel Attention (LKA) & Multi-dimensional Channel Attention (MCA)**
 
-<img src=".\fig\MSTA.png" alt="LKA & MCA" style="zoom: 10%;" />
+<p align="center" width="100%">
+<img src=".\fig\MSTA.jpg" alt="LKA & MCA" width="10%" />
+</p>
