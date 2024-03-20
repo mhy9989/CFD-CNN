@@ -45,7 +45,7 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 - **MSTA Layer**
 
 <p align="center" width="100%">
-<img src=".\fig\MSTA_flow_chart.jpg" width="30%" />
+<img src=".\fig\MSTA_flow_chart.jpg" width="50%" />
 </p>
 
 - **Large Kernel Attention (LKA) & Multi-dimensional Channel Attention (MCA)**
