@@ -32,8 +32,9 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 - **Overview architecture**
 
 <p align="center" width="100%">
-<img src=".\fig\overview_architecture.jpg" width="50% />
+<img src=".\fig\overview_architecture.jpg" width="50%" />
 </p>
+
 
 - **MSTA Block**
 
