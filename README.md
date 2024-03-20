@@ -31,22 +31,24 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 
 - **Overview architecture**
 
-<img src=".\overview_architecture.jpg" style="zoom:10%;" />
+<p align="center" width="100%">
+<img src=".\fig\overview_architecture.jpg" width="50% />
+</p>
 
 - **MSTA Block**
-- 
+
 <p align="center" width="100%">
-<img src=".\fig\MSTA_Block.png" width="20%" />
+<img src=".\fig\MSTA_Block.jpg" width="50%" />
 </p>
 
 - **MSTA Layer**
 
 <p align="center" width="100%">
-<img src=".\fig\MSTA_flow_chart.jpg" width="20%" />
+<img src=".\fig\MSTA_flow_chart.jpg" width="50%" />
 </p>
 
 - **Large Kernel Attention (LKA) & Multi-dimensional Channel Attention (MCA)**
 
 <p align="center" width="100%">
-<img src=".\fig\MSTA.jpg" alt="LKA & MCA" width="10%" />
+<img src=".\fig\MSTA.jpg" alt="LKA & MCA" width="70%" />
 </p>
