@@ -64,7 +64,7 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     print_log(f"Length of all dataset: {len(dataset)}")
     print_log(f"Length of train_dataset: {len(train_dataset)}")
     print_log(f"Length of valid_dataset: {len(valid_dataset)}")
-    print_log(f"Length of test_dataset: {len(valid_dataset)}")
+    print_log(f"Length of test_dataset: {len(test_dataset)}")
     print_log(f"Shape of input_data: {test_dataset[0][0].shape}")
     print_log(f"Shape of label_data: {test_dataset[0][1].shape}")
 
@@ -80,7 +80,7 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     train_loader = DataLoader(train_dataset,
                                 sampler=train_sampler,
                                 num_workers=args.num_workers,
-                                drop_last=False,
+                                drop_last=args.drop_last,
                                 pin_memory=True,
                                 batch_size=args.per_device_train_batch_size)
     vali_loader = DataLoader(valid_dataset,
@@ -93,7 +93,8 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
                                 num_workers=args.num_workers,
                                 pin_memory=True,
                                 batch_size=args.per_device_valid_batch_size,
-                                shuffle = False)
+                                shuffle = False,
+                                drop_last=False)
     return train_loader, vali_loader, test_loader, data_scaler_list, dataset.x_mesh, dataset.y_mesh, dataset.jac
 
 

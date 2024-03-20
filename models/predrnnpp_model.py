@@ -12,13 +12,13 @@ class PredRNNpp_Model(nn.Module):
 
     """
 
-    def __init__(self, num_layers, num_hidden, configs, **kwargs):
+    def __init__(self, num_hidden, configs, **kwargs):
         super(PredRNNpp_Model, self).__init__()
         T, C, H, W = configs.in_shape
 
         self.configs = configs
         self.frame_channel = configs.patch_size * configs.patch_size * C
-        self.num_layers = num_layers
+        self.num_layers = len(num_hidden)
         self.num_hidden = num_hidden
         cell_list = []
 
@@ -26,16 +26,16 @@ class PredRNNpp_Model(nn.Module):
         width = W // configs.patch_size
         self.MSE_criterion = nn.MSELoss()
         
-        self.gradient_highway = GHU(num_hidden[0], num_hidden[0], height, width,
+        self.gradient_highway = GHU(self.num_hidden[0], self.num_hidden[0], height, width,
                                     configs.filter_size, configs.stride, configs.layer_norm)
 
-        for i in range(num_layers):
-            in_channel = self.frame_channel if i == 0 else num_hidden[i - 1]
+        for i in range(self.num_layers):
+            in_channel = self.frame_channel if i == 0 else self.num_hidden[i - 1]
             cell_list.append(
-                CausalLSTMCell(in_channel, num_hidden[i], height, width,
+                CausalLSTMCell(in_channel, self.num_hidden[i], height, width,
                                configs.filter_size, configs.stride, configs.layer_norm))
         self.cell_list = nn.ModuleList(cell_list)
-        self.conv_last = nn.Conv2d(num_hidden[num_layers - 1], self.frame_channel,
+        self.conv_last = nn.Conv2d(self.num_hidden[self.num_layers - 1], self.frame_channel,
                                    kernel_size=1, stride=1, padding=0, bias=False)
 
     def forward(self, frames_tensor, mask_true, **kwargs):
@@ -87,9 +87,5 @@ class PredRNNpp_Model(nn.Module):
 
         # [length, batch, channel, height, width] -> [batch, length, height, width, channel]
         next_frames = torch.stack(next_frames, dim=0).permute(1, 0, 3, 4, 2).contiguous()
-        if kwargs.get('return_loss', True):
-            loss = self.MSE_criterion(next_frames, frames_tensor[:, 1:])
-        else:
-            loss = None
 
-        return next_frames, loss
+        return next_frames

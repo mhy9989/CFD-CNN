@@ -1,5 +1,5 @@
 #!/bin/bash
-#DSUB -n DeePCK
+#DSUB -n MSTA
 #DSUB -A root.bingxing2.gpuuser661
 #DSUB -q root.default
 #DSUB -l wuhanG5500

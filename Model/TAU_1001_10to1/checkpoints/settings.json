@@ -6,7 +6,7 @@
     "per_device_valid_batch_size": 4,
     "gradient_accumulation_steps": 1,
     "num_workers": 12,
-    "method": "SimVP",
+    "method": "TAU",
     "max_epoch": 500,
     "lossfun": "MSE",
     "load_from": false,
@@ -63,20 +63,24 @@
   },
   "sched_config": {
     "sched": "onecycle",
+    "min_lr": 1e-7,
+    "warmup_lr": 1e-5,
+    "warmup_epoch": 0,
     "decay_rate": 0.1,
     "decay_epoch": 100,
     "lr_k_decay": 1.0,
     "final_div_factor": 1e4
   },
   "model_config": {
-    "model_type": "swin",
+    "model_type": "tau",
     "hid_S": 32,
     "hid_T": 256,
     "N_S": 2,
     "N_T": 8,
     "spatio_kernel_enc": 3,
     "spatio_kernel_dec": 3,
-    "drop_path":0.1
+    "drop_path":0.1,
+    "alpha": 0.1
   },
   "ds_config":{
     "offload": false,

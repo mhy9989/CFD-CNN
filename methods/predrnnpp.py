@@ -12,13 +12,11 @@ class PredRNNpp(PredRNN):
 
     """
 
-    def __init__(self, args, device, steps_per_epoch):
-        PredRNN.__init__(self, args, device, steps_per_epoch)
+    def __init__(self, args, ds_config, base_criterion):
+        PredRNN.__init__(self, args, ds_config, base_criterion)
         self.model = self.build_model(self.args)
-        self.optimizer, self.scheduler, self.by_epoch = self._init_optimizer(steps_per_epoch)
-        self.criterion = nn.MSELoss()
 
     def build_model(self, args):
-        num_hidden = [int(x) for x in self.args.num_hidden.split(',')]
-        num_layers = len(num_hidden)
-        return PredRNNpp_Model(num_layers, num_hidden, args).to(self.device)
+        num_hidden = self.args.num_hidden
+        return PredRNNpp_Model(num_hidden, args).to(self.device)
+

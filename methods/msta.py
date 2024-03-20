@@ -7,7 +7,7 @@ from .simvp import SimVP
 from models import SimVP_Model
 from core.lossfun import diff_div_reg, GS, Regularization, GS0
 
-class SAU(SimVP):
+class MSTA(SimVP):
 
     def __init__(self, args, ds_config, base_criterion):
         SimVP.__init__(self, args, ds_config, base_criterion)
@@ -18,7 +18,11 @@ class SAU(SimVP):
 
     def cal_loss(self, pred_y, batch_y, **kwargs):
         """criterion of the model."""
-        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y) + 0.1 * GS(pred_y, batch_y, self.jac, mode = "CD4")
+        loss = self.base_criterion(pred_y, batch_y) + self.args.alpha * diff_div_reg(pred_y, batch_y)
+        if self.args.gs == 1:
+            loss += self.args.beta * GS(pred_y, batch_y, self.jac, mode = "CD4")
+        elif self.args.gs == 0:
+            loss += self.args.beta * GS0(pred_y, batch_y, mode = "CD4")
         if self.args.regularization > 0:
             reg_loss = self.reg(self.model)
             loss += reg_loss

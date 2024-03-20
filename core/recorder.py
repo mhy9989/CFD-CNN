@@ -5,7 +5,8 @@ import os.path as osp
 
 
 class Recorder:
-    def __init__(self, verbose=False, delta=0, early_stop_time=30, rank=0, dist=True, max_epochs = 0):
+    def __init__(self, verbose=False, delta=0, early_stop_time=30, rank=0, dist=True, 
+                 max_epochs = 0, method = "CFD-Conv"):
         self.verbose = verbose
         self.best_score = None
         self.val_loss_min = np.Inf
@@ -19,10 +20,12 @@ class Recorder:
                 "train_loss" : [],
                 "valid_loss" : []
             }
+        self.method = method
 
     def __call__(self, train_loss, val_loss, model, path , epoch):
-        self.loss_recoder["train_loss"].append(float(train_loss)) 
-        self.loss_recoder["valid_loss"].append(float(val_loss) if val_loss else 0) 
+        self.loss_recoder["train_loss"].append(float(train_loss))
+        if val_loss:
+            self.loss_recoder["valid_loss"].append(float(val_loss)) 
         val_loss = val_loss if val_loss else train_loss
         score = -val_loss 
         if self.best_score is None:
@@ -39,7 +42,7 @@ class Recorder:
             json_file_path = osp.join(path,"checkpoints","loss_recoder.json")
             save_json(self.loss_recoder, json_file_path)
             print_log(f'Save the loss_recoder of {epoch+1} epochs')
-            plot_learning_curve(self.loss_recoder, path, 300, title='CFD-Conv model')
+            plot_learning_curve(self.loss_recoder, path, 300, title=f'{self.method} model')
 
         return self.decrease_time > self.early_stop_time 
     

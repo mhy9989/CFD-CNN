@@ -17,7 +17,7 @@ def add_argument():
 
 def main():
     ## model name
-    modelname = 'CFD_Conv1001_10to1'
+    modelname = 'MSTA_1001_10to1'
     mode = "inference"
     infer_num = [-10]
     infer_step = 10

@@ -5,20 +5,22 @@ def default_parser():
     "setup_config":{
         "seed": 2023,
         "diff_seed": False,
-        "per_device_train_batch_size": 1,
-        "per_device_valid_batch_size": 1,
+        "per_device_train_batch_size": 4,
+        "per_device_valid_batch_size": 4,
         "num_workers": 1,
-        "method": "SAU",
-        "max_epoch": 200,
+        "method": "MSTA",
+        "max_epoch": 500,
         "lossfun": "MSE",
         "load_from": False,
         "if_continue": True,
         "regularization": 0.0,
-        "if_display_method_info": False,
+        "if_display_method_info": True,
         "mem_log": True,
         "empty_cache": True,
         "metrics":["MSE", "RMSE", "MAE", "MRE", "SSIM", "MAX_RE"],
-        "fps": True
+        "fps": True,
+        "drop_last": False,
+        "gs": 1,
     },
     "data_config": {
         "data_path": "./CFD_data.npy",
@@ -53,14 +55,14 @@ def default_parser():
         "text_num": 10
     },
     "optim_config": {
-        "optim": "Adam",
+        "optim": "Adamw",
         "lr": 0.001,
         "filter_bias_and_bn": False,
         "log_step": 1,
         "opt_eps": "",
         "opt_betas": "",
         "momentum": 0.9,
-        "weight_decay": 0,
+        "weight_decay": 0.01,
         "early_stop_epoch": -1
     },
     "sched_config": {
@@ -74,7 +76,7 @@ def default_parser():
         "final_div_factor": 1e4
     },
     "model_config": {
-        "model_type": "sau2",
+        "model_type": "msta",
         "hid_S": 128,
         "hid_T": 1024,
         "N_S": 8,

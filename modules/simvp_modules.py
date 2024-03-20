@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 
-from timm.models.layers import DropPath, trunc_normal_
+from timm.layers  import DropPath, trunc_normal_
 from timm.models.convnext import ConvNeXtBlock
 from timm.models.mlp_mixer import MixerBlock
 from timm.models.swin_transformer import SwinTransformerBlock, window_partition, window_reverse
@@ -418,13 +418,13 @@ class PoolFormerSubBlock(PoolFormerBlock):
 class SwinSubBlock(SwinTransformerBlock):
     """A block of Swin Transformer."""
 
-    def __init__(self, dim, input_resolution=None, layer_i=0, mlp_ratio=4., drop=0., drop_path=0.1):
+    def __init__(self, dim, input_resolution=None, layer_i=0, drop=0., mlp_ratio=4., drop_path=0.1):
         window_size = 7 if input_resolution[0] % 7 == 0 else max(4, input_resolution[0] // 16)
         window_size = min(8, window_size)
         shift_size = 0 if (layer_i % 2 == 0) else window_size // 2
         super().__init__(dim, input_resolution, num_heads=8, window_size=window_size,
                          shift_size=shift_size, mlp_ratio=mlp_ratio,
-                         drop_path=drop_path, drop=drop, qkv_bias=True)
+                         proj_drop=drop, drop_path=drop_path, qkv_bias=True)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -442,42 +442,14 @@ class SwinSubBlock(SwinTransformerBlock):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        x = x.flatten(2).transpose(1, 2)
-        shortcut = x
-        x = self.norm1(x)
-        x = x.view(B, H, W, C)
+        x = x.permute(0, 2, 3, 1)
 
-        # cyclic shift
-        if self.shift_size > 0:
-            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
-        else:
-            shifted_x = x
+        x = x + self.drop_path1(self._attn(self.norm1(x)))
+        x = x.reshape(B, -1, C)
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))
+        x = x.reshape(B, H, W, C)
 
-        # partition windows
-        x_windows = window_partition(
-            shifted_x, self.window_size)  # nW*B, window_size, window_size, C
-        x_windows = x_windows.view(
-            -1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-
-        # W-MSA/SW-MSA
-        attn_windows = self.attn(x_windows, mask=None)  # nW*B, window_size*window_size, C
-
-        # merge windows
-        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
-
-        # reverse cyclic shift
-        if self.shift_size > 0:
-            x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
-        else:
-            x = shifted_x
-        x = x.view(B, H * W, C)
-
-        # FFN
-        x = shortcut + self.drop_path(x)
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-
-        return x.reshape(B, H, W, C).permute(0, 3, 1, 2)
+        return x.permute(0, 3, 1, 2)
 
 
 def UniformerSubBlock(embed_dims, mlp_ratio=4., drop=0., drop_path=0.,
@@ -521,7 +493,7 @@ class ViTSubBlock(ViTBlock):
 
     def __init__(self, dim, mlp_ratio=4., drop=0., drop_path=0.1):
         super().__init__(dim=dim, num_heads=8, mlp_ratio=mlp_ratio, qkv_bias=True,
-                         drop=drop, drop_path=drop_path, act_layer=nn.GELU, norm_layer=nn.LayerNorm)
+                         proj_drop=drop, drop_path=drop_path, act_layer=nn.GELU, norm_layer=nn.LayerNorm)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.apply(self._init_weights)
 
@@ -554,10 +526,8 @@ class TemporalAttention(nn.Module):
         
         self.proj_1 = nn.Conv2d(d_model, d_model, 1)         # 1x1 conv
         self.activation = nn.GELU()                          # GELU
-        if mode == "sau":
-            a = SpatiotemporalAttentionModule(d_model, h_w, kernel_size)
-        elif mode == "sau2":
-            a = SpatiotemporalAttentionModule2(d_model, h_w, kernel_size)
+        if mode == "msta":
+            a = Multi_Spatiotemporal_AttentionLayer(d_model, h_w, kernel_size)
         elif mode == "eca":
             a = ExternalAttentionModule(d_model, kernel_size)
         else:
@@ -613,51 +583,8 @@ class ExternalAttentionModule(nn.Module):
         return eca_atten.expand_as(u) * f_x * u
 
 
-class SpatiotemporalAttentionModule(nn.Module):
-    """Spatiotemporal Attention for SimVP"""
-
-    def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
-        super().__init__()
-        h, w = h_w
-        d_k = 2 * dilation - 1
-        d_p = (d_k - 1) // 2
-        dd_k = kernel_size // dilation + ((kernel_size // dilation) % 2 - 1)
-        dd_p = (dilation * (dd_k - 1) // 2)
-
-        t = int(abs((math.log2(dim) + b) / gamma))
-        k = t if (t % 2) else (t + 1)
-
-        self.conv0 = nn.Conv2d(dim, dim, d_k, padding=d_p, groups=dim)
-        self.conv_spatial = nn.Conv2d(
-            dim, dim, dd_k, stride=1, padding=dd_p, groups=dim, dilation=dilation)
-        self.conv1 = nn.Conv2d(dim, dim, 1)
-        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
-        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
-        self.pool = nn.AdaptiveAvgPool1d(1)
-        self.conv_h=nn.Conv1d(h,h,kernel_size=k,padding=int(k/2),bias=False)
-        self.conv_w=nn.Conv1d(w,w,kernel_size=k,padding=int(k/2),bias=False)
-        self.sigmoid=nn.Sigmoid()
-
-    def forward(self, x):
-        u = x.clone()
-        attn = self.conv0(x)           # depth-wise conv
-        attn = self.conv_spatial(attn) # depth-wise dilation convolution
-        f_x = self.conv1(attn)         # 1x1 conv
-        # append a se operation
-        b, c, _, _ = x.size()
-        x_h = self.pool_h(x).squeeze(-1).permute(0,2,1) 
-        x_w = self.pool_w(x).squeeze(-2).permute(0,2,1) 
-        x_h = self.conv_h(x_h)
-        x_w = self.conv_w(x_w)
-        a_h = self.pool(x_h.permute(0,2,1)).view(b, c, 1, 1)
-        a_w = self.pool(x_w.permute(0,2,1)).view(b, c, 1, 1)
-        a_h = self.sigmoid(a_h) 
-        a_w = self.sigmoid(a_w)
-        return (a_w.expand_as(u) + a_h.expand_as(u)) * f_x * u
-
-
-class SpatiotemporalAttentionModule2(nn.Module):
-    """Spatiotemporal2 Attention for SimVP"""
+class Multi_Spatiotemporal_AttentionLayer(nn.Module):
+    """Multi Spatio_temporal Attention(MSTA)"""
 
     def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
         super().__init__()
@@ -697,7 +624,7 @@ class SpatiotemporalAttentionModule2(nn.Module):
         a_w = self.pool(x_w.permute(0,2,1)).view(b, c, 1, 1)
         a_h = self.sigmoid(a_h)
         a_w = self.sigmoid(a_w)
-        return (a_w.expand_as(u) + a_h.expand_as(u)) * f_x * u
+        return (a_w.expand_as(u) * a_h.expand_as(u)) * f_x * u
 
 
 class TemporalAttentionModule(nn.Module):

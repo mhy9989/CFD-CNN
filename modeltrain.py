@@ -136,7 +136,7 @@ class modeltrain(object):
     def display_method_info(self):
         """Plot the basic infomation of supported methods"""
         T, C, H, W = self.args.in_shape
-        if self.args.method in ['simvp', 'tau', 'sau']:
+        if self.args.method in ['simvp', 'tau', 'msta']:
             input_dummy = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
         elif self.args.method == 'crevnet':
             # crevnet must use the batchsize rather than 1
@@ -179,7 +179,8 @@ class modeltrain(object):
     def train(self):
         """Training loops of methods"""
         recorder = Recorder(verbose=True, early_stop_time=min(self.max_epochs // 10, 30), 
-                            rank = self.rank, dist=self.dist, max_epochs = self.max_epochs)
+                            rank = self.rank, dist=self.dist, max_epochs = self.max_epochs,
+                            method = self.args.method)
         num_updates = self.epoch * self.steps_per_epoch
         vali_loss = False
         early_stop = False
@@ -202,8 +203,12 @@ class modeltrain(object):
             
             cur_lr = self.method.current_lr()
             cur_lr = sum(cur_lr) / len(cur_lr)
-            print_log('Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e} | Vali Loss: {4:.5e}'.format(
-                        epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg, vali_loss if vali_loss else 0))
+            
+            epoch_log = 'Epoch: {0}, Steps: {1} | Lr: {2:.5e} | Train Loss: {3:.5e}'.format(
+                        epoch + 1, len(self.train_loader), cur_lr, loss_mean.avg)
+            if vali_loss:
+                epoch_log += f" | Vali Loss: {vali_loss:.5e}"
+            print_log(epoch_log)
 
             print_log(f'Epoch time: {epoch_time_m.val:.2f}s, Average time: {epoch_time_m.avg:.2f}s')
 

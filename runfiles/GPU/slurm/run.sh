@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J DeePCK
+#SBATCH -J MSAT
 #SBATCH --gpus=1
 #SBATCH -o slurm-%j.log
 #SBATCH -e slurm-%j.log

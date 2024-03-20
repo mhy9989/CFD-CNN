@@ -1,25 +1,42 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import os
-from utils.utils import json2Parser, save_json
+import json
+from easydict import EasyDict as edict
+from concurrent.futures import ThreadPoolExecutor
+nx = 1181
+ny = 220
+data_type_num=4
+data_num = 1001
+data_path = "./../cfd-data-1001"
+setting_path = f"./{data_num}.json"
+
+def save_json(data, data_path):
+    """Save json data"""
+    with open(data_path, 'w') as json_file:
+        json.dump(data, json_file, indent=4)
+
+
+def load_and_process_data(j):
+    """Load and process data for a given index"""
+    flow_data_path = os.path.join(data_path, f"flowxy-{j:04d}.dat")
+    print(flow_data_path)
+    data = np.loadtxt(flow_data_path, skiprows=2)
+    processed_data = np.zeros((data_type_num, ny * nx))
+    for i in range(data_type_num):
+        processed_data[i] = data[:, i + 2]
+    return processed_data
 
 def main():
-    modelname = 'CFD_Conv1001_5to1'
     ## model path
-    dir_path = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(dir_path, 'Model', f'{modelname}')
-    setting_path = os.path.join(model_path, 'checkpoint', f'settings.json')
-    args = json2Parser(setting_path)
-    nx = args.data_width
-    ny = args.data_height
-    data_type_num = len(args.data_type)
-    input_data_list = np.zeros((data_type_num,args.data_num, ny*nx))
-    for j in range(1, 1+args.data_num):
-        data_path = os.path.join(args.data_path , f"flowxy-{j:04d}.dat")
-        print(data_path)
-        data = np.loadtxt(data_path,skiprows=2)
-        for i in range(data_type_num):
-            input_data_list[i, j-1] = data[:, i+2]
+    input_data_list = np.zeros((data_type_num, data_num, ny * nx))
+    # Use ThreadPoolExecutor to parallelize data loading and processing
+    with ThreadPoolExecutor() as executor:
+        # Map the function over the range of file indices
+        results = list(executor.map(load_and_process_data, range(1, 1 + data_num)))
+    # Aggregate the results
+    for j, result in enumerate(results):
+        input_data_list[:, j] = result
     
     mean = []
     std = []
@@ -30,6 +47,8 @@ def main():
         std.append(np.std(input_data_list[i]))
         max.append(input_data_list[i].max())
         min.append(input_data_list[i].min())
+    
+    args = edict({})
     
     args.data_mean = mean
     args.data_std = std

@@ -17,7 +17,7 @@ def add_argument():
 
 def main():
     ## model name
-    modelname = 'MAU_1001_10to1'
+    modelname = 'MIM_1001_10to1'
     ## model path
     dir_path = os.path.dirname(os.path.abspath(__file__))
 
