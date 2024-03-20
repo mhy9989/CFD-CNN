@@ -9,7 +9,7 @@
 - `core/` core training plugins and metrics.
 - `methods/` contains training methods for various prediction methods.
 - `Model/` contains the control files for various prediction methods and is used to store the model and training results.
-- `models`/ contains the main network architectures of various video prediction methods.
+- `models/` contains the main network architectures of various video prediction methods.
 - `modules/` contains network modules and layers.
 - `runfiles/` contains various startup scripts.
 - `tool/` contains the font files `tool/font/`, pre-processing file `tool/pre-data.py`and standardized file `tool/comput_norm.py`
