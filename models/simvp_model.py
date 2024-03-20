@@ -197,14 +197,10 @@ class MetaBlock(nn.Module):
             self.block = TAUSubBlock(
                 in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
                 drop=drop, drop_path=drop_path, act_layer=nn.GELU)
-        elif model_type == 'sau':
+        elif model_type == 'msta':
             self.block = TAUSubBlock(
                 in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
-                drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "sau")
-        elif model_type == 'sau2':
-            self.block = TAUSubBlock(
-                in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,
-                drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "sau2")
+                drop=drop, drop_path=drop_path, act_layer=nn.GELU, mode = "msta")
         elif model_type == 'eca':
             self.block = TAUSubBlock(
                 in_channels, input_resolution, kernel_size=21, mlp_ratio=mlp_ratio,

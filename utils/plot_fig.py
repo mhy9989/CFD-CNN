@@ -44,9 +44,10 @@ def plot_learning_curve(loss_record, model_path, dpi=300, title='', dir_name = "
     ''' Plot learning curve of your DNN (train & valid loss) '''
     total_steps = len(loss_record['train_loss'])
     x_1 = range(total_steps)
-    x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
-    plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
     plt.semilogy(x_1, loss_record['train_loss'], c='tab:red', label='train')
+    if len(loss_record['valid_loss']) != 0:
+        x_2 = x_1[::len(loss_record['train_loss']) // len(loss_record['valid_loss'])]
+        plt.semilogy(x_2, loss_record['valid_loss'], c='tab:cyan', label='valid')
     plt.xlabel('Training steps', fontsize=15)
     plt.ylabel('Loss', fontsize=15)
     plt.title('Learning curve of {}'.format(title), fontsize=15)
