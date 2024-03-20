@@ -27,7 +27,7 @@
 
 The code for **Multi Spatio_temporal Attention (MSTA)** Layer can  be found in `MSTA/MSTA.py`
 
-The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found `models/simvp_model.py` and `modules/simvp_modules.py`
+The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found in `models/simvp_model.py` and `modules/simvp_modules.py`
 
 - **Overview architecture**
 
