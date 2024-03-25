@@ -58,7 +58,7 @@ class modeltrain(object):
 
     def get_data(self):
         """Prepare datasets and dataloaders"""
-        if self.mode == "train":
+        if self.mode == "train" or self.mode == "test":
             (self.train_loader, 
             self.vali_loader, 
             self.test_loader, 
@@ -136,7 +136,7 @@ class modeltrain(object):
     def display_method_info(self):
         """Plot the basic infomation of supported methods"""
         T, C, H, W = self.args.in_shape
-        if self.args.method in ['simvp', 'tau', 'msta']:
+        if self.args.method in ['simvp', 'tau', 'sau']:
             input_dummy = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
         elif self.args.method == 'crevnet':
             # crevnet must use the batchsize rather than 1
@@ -244,7 +244,7 @@ class modeltrain(object):
 
         return results['loss'].mean()
 
-    def test(self):
+    def test(self, min_max_delt=None):
         """A testing loop of methods"""
         best_model_path = osp.join(self.checkpoints_path, 'checkpoint.pth')
         self.load_from_state_dict(torch.load(best_model_path))
@@ -255,42 +255,43 @@ class modeltrain(object):
         metric_list = self.method.metric_list
 
         # Computed
-        eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
-                                    metrics=metric_list, channel_names=channel_names, mode = "Computed")
-        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
-        print_log(f"{eval_log_av}")
+        self.test_unit(results,metric_list,channel_names,"Computed",min_max_delt)
 
+        # Original
+        if self.scaler_list:
+            results_n = self.de_norm(results)
+            self.test_unit(results_n,metric_list,channel_names,"Original",min_max_delt)
+
+        return 
+
+
+    def test_unit(self, results, metric_list, channel_names, mode="Computed",min_max_delt=None):
+        eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
+                                    metrics=metric_list, channel_names=channel_names, mode = mode)
+        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+        print_log(f"Total:")
+        print_log(f"{eval_log_av}\n")
         if self.rank == 0:
-            for t in range(self.args.data_after):
-                self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], "Computed")
-                print_log(f"after: {t}, Computed picture is saved")
-            
-            folder_path = osp.join(self.model_path, 'saved', "Computed")
+            folder_path = osp.join(self.model_path, 'saved', mode,"total")
             check_dir(folder_path)
             for np_data in ['metrics', 'inputs', 'labels', 'preds']:
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
-        eval_res_av_n=""
-        # Original
-        if self.scaler_list:
-            results_n = self.de_norm(results)
-            eval_res_av_n, eval_log_av_n = metric(results['preds'], results['labels'],
-                                        self.scaler_list,
-                                        metrics=metric_list, channel_names=channel_names, mode = "Original")
-            results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
-            print_log(f"\n{eval_log_av_n}")
-
+        for t in range(self.args.data_after):
+            eval_res_av, eval_log_av = metric(results['preds'][:, None, t], results['labels'][:,None, t],
+                                        metrics=metric_list, channel_names=channel_names, mode = mode)
+            results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+            print_log(f"After {t}:")
+            print_log(f"{eval_log_av}\n")
             if self.rank == 0:
-                for t in range(self.args.data_after):
-                    self.plot_test(t, results_n['preds'][-1,t], results_n['labels'][-1,t], "Original")
-                    print_log(f"after: {t}, Original picture is saved")
+                self.plot_test(t, results['preds'][-1,t], results['labels'][-1,t], mode,
+                               min_max_delt=min_max_delt)
                 
-                folder_path = osp.join(self.model_path, 'saved', "Original")
+                folder_path = osp.join(self.model_path, 'saved', mode, f"after{t}")
                 check_dir(folder_path)
                 for np_data in ['metrics', 'inputs', 'labels', 'preds']:
-                    np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
+                    np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
-        return eval_res_av, eval_res_av_n
     
     def muti_inference(self, checkpoint = 'checkpoint.pth'):
         """A inference loop of methods with multistep"""
@@ -316,49 +317,45 @@ class modeltrain(object):
 
         # Computed
         for s, results in enumerate(results_step):
-            eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
-                                        metrics=metric_list, channel_names=channel_names, mode = "Computed")
-            results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
-            print_log(f"\nStep: {s}\n{eval_log_av}")
-
-            if self.rank == 0:
-                for b, infer in enumerate(self.inference_list):
-                    for t in range(self.args.data_after):
-                        self.plot_test(t, results['preds'][b,t], results['labels'][b,t], "Computed", dir_name = f"inference/pic/infer{infer}/Step{s}")
-                        print_log(f"infer: {b}, after: {t}, Computed picture is saved")
-
-                folder_path = osp.join(self.model_path, "inference", "saved", "Computed", f"Step{s}")
-                check_dir(folder_path)
-                for np_data in ['metrics', 'inputs', 'labels', 'preds']:
-                    np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
+            self.muti_inference_unit(s, results, metric_list, channel_names, "Computed")
         
-        eval_res_av_n=""
         # Original
         if self.scaler_list:
             for s, results in enumerate(results_step):
                 results_n = self.de_norm(results)
-                eval_res_av_n, eval_log_av_n = metric(results['preds'], results['labels'],
-                                            self.scaler_list,
-                                            metrics=metric_list, channel_names=channel_names, mode = "Original")
-                results_n['metrics'] = np.array([eval_res_av_n['mae'], eval_res_av_n['mse'], eval_res_av_n['mre']])
-                print_log(f"\nStep: {s}\n{eval_log_av_n}")
-
-                if self.rank == 0:
-                    for b, infer in enumerate(self.inference_list):
-                        for t in range(self.args.data_after):
-                            self.plot_test(t, results_n['preds'][b,t], results_n['labels'][b,t], "Original", dir_name = f"inference/pic/infer{infer}/Step{s}")
-                            print_log(f"infer: {b}, after: {t}, Original picture is saved")
-
-                    folder_path = osp.join(self.model_path, 'inference', 'saved', "Original", f"Step{s}")
-                    check_dir(folder_path)
-
-                    for np_data in ['metrics', 'inputs', 'labels', 'preds']:
-                        np.save(osp.join(folder_path, np_data + '.npy'), results_n[np_data])
-
+                self.muti_inference_unit(s, results_n, metric_list, channel_names, "Original")
 
         results_step = np.array(results_step)
         folder_path = osp.join(self.model_path, 'inference', 'results_step.npy')
         np.save(folder_path, results_step)
+
+
+    def muti_inference_unit(self, s, results, metric_list, channel_names, mode="Computed"):
+        eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
+                                    metrics=metric_list, channel_names=channel_names, mode = mode)
+        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+        print_log(f"Total:")
+        print_log(f"Step: {s}\n{eval_log_av}\n")
+        if self.rank == 0:
+            folder_path = osp.join(self.model_path, "inference", 'saved', mode,"total")
+            check_dir(folder_path)
+            for np_data in ['metrics', 'inputs', 'labels', 'preds']:
+                np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
+
+        for b, infer in enumerate(self.inference_list):
+            for t in range(self.args.data_after):
+                eval_res_av, eval_log_av = metric(results['preds'][None, b, None, t], results['labels'][None, b, None, t],
+                                            metrics=metric_list, channel_names=channel_names, mode = mode)
+                results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+                print_log(f"Infer {b}, After {t}:")
+                print_log(f"{eval_log_av}\n")
+                if self.rank == 0:
+                    self.plot_test(t, results['preds'][b,t], results['labels'][b,t], mode, dir_name = f"inference/pic/infer{infer}/step{s}")
+                    
+                    folder_path = osp.join(self.model_path, "inference", "saved", mode, f"infer{infer}", f"step{s}", f"after{t}")
+                    check_dir(folder_path)
+                    for np_data in ['metrics', 'inputs', 'labels', 'preds']:
+                        np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
 
     def inference(self):
@@ -375,7 +372,8 @@ class modeltrain(object):
                 np.save(osp.join(folder_path, np_data + '.npy'), results[np_data])
 
         return None
-    
+
+
     def plot_test(self, t, preds, labels, mode, 
                   dpi = 300, dir_name = "pic", 
                   min_max_base = None, min_max_delt = None):
@@ -395,11 +393,12 @@ class modeltrain(object):
             plot_figure(self.x_mesh, self.y_mesh, min_max, preds[i], 
                              self.args.data_use[i], "pred", mode, select_pic, dpi)
             if min_max_delt == None:
-                min_max = [(labels[i]-preds[i]).min(), (labels[i]-preds[i]).max()]
-            plot_figure(self.x_mesh, self.y_mesh, min_max, labels[i]-preds[i], 
+                min_max = [(preds[i]-labels[i]).min(), (preds[i]-labels[i]).max()]
+            plot_figure(self.x_mesh, self.y_mesh, min_max, preds[i]-labels[i], 
                              self.args.data_use[i], "delt", mode, select_pic, dpi)
         return None
-    
+
+
     def de_norm(self, results):
         results_ori = {}
         for name in results.keys():
