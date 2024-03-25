@@ -20,13 +20,13 @@ def main():
     modelname = 'MSTA_1001_10to1'
     ## model path
     dir_path = os.path.dirname(os.path.abspath(__file__))
-
+    min_max_delt = None
     ds_args = add_argument()
     model_path = os.path.join(dir_path, 'Model', f'{modelname}')
     total_data = modelbuild(model_path, ds_args)
     model_data = total_data.get_data()
     model = modeltrain(model_data, model_path)
-    model.test()
+    model.test(min_max_delt)
 
 
 

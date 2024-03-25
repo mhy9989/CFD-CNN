@@ -20,6 +20,7 @@ rcParams.update(config)
 def plot_figure(x_mesh, y_mesh, min_max, data, data_select, data_name, mode, pic_folder, dpi=300):
     cmap = 'RdBu_r'
     levels = np.linspace(min_max[0], min_max[1], 600)
+    data = np.clip(data, min_max[0], min_max[1])
     map = plt.contourf(x_mesh, y_mesh, data, levels,cmap=cmap) 
     pic_name = f'{data_select}_{mode}_{data_name}.png'
     ax = plt.gca()
