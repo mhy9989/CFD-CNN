@@ -19,7 +19,7 @@ def main():
     ## model name
     modelname = 'MSTA_1001_10to1'
     mode = "inference"
-    infer_num = [-10]
+    infer_num = [-10] #range(-50,-10)
     infer_step = 10
     min_max_delt=None
     mean=False
