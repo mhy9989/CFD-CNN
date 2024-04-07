@@ -22,6 +22,7 @@ def main():
     infer_num = [-10]
     infer_step = 10
     min_max_delt=None
+    mean=False
     ## model path
     dir_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,7 +31,7 @@ def main():
     total_data = modelbuild(model_path, ds_args, mode)
     model_data = total_data.get_data()
     model = modeltrain(model_data, model_path, mode, infer_num = infer_num, infer_step = infer_step)
-    model.muti_inference(min_max_delt)
+    model.muti_inference(min_max_delt, mean)
 
 
 
