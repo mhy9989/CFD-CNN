@@ -162,7 +162,6 @@ class CFD_Dataset(Dataset):
         data_after_num = self.infer_step * self.data_after 
 
         for i in inference_list:
-            print(i-self.data_previous, i+data_after_num)
             inference_data.append(self.data_matrix[i-self.data_previous:i+data_after_num])
         
         return np.array(inference_data) # B, T, C, H, W
