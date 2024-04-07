@@ -339,7 +339,7 @@ class modeltrain(object):
             for t in range(self.args.data_after):
                 eval_res_av, eval_log_av = metric(results['preds'][None, b, None, t], results['labels'][None, b, None, t],
                                             metrics=metric_list, channel_names=channel_names, mode = mode)
-                print_log(f"Infer {b}, After {t}, Step {s}:")
+                print_log(f"Infer {infer}, After {t}, Step {s}:")
                 print_log(f"{eval_log_av}\n")
                 if self.rank == 0:
                     self.plot_test(t, results['preds'][b,t], results['labels'][b,t], mode, dir_name = f"inference/pic/infer{infer}/step{s}",min_max_delt=min_max_delt)
