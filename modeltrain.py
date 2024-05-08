@@ -317,6 +317,10 @@ class modeltrain(object):
             for s, results in enumerate(results_step):
                 results_n = self.de_norm(results)
                 self.muti_inference_unit(s, results_n, metric_list, channel_names, "Original", min_max_delt, mean)
+        
+        results_step = np.array(results_step)
+        folder_path = osp.join(self.model_path, 'inference', 'results_step.npy')
+        np.save(folder_path, results_step)
 
 
     def muti_inference_unit(self, s, results, metric_list, channel_names, mode="Computed", min_max_delt=None, mean=False):
