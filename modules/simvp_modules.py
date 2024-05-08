@@ -610,10 +610,11 @@ class Multiple_Spatiotemporal_AttentionLayer(nn.Module):
 
     def forward(self, x):
         u = x.clone()
+        # append a LKA
         attn = self.conv0(x)           # depth-wise conv
         attn = self.conv_spatial(attn) # depth-wise dilation convolution
         f_x = self.conv1(attn)         # 1x1 conv
-        # append a MCA
+        # append a MFA
         b, c, _, _ = x.size()
         x_h = self.pool_h(x).squeeze(-1).permute(0,2,1)
         x_w = self.pool_w(x).squeeze(-2).permute(0,2,1)
