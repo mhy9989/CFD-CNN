@@ -527,7 +527,7 @@ class TemporalAttention(nn.Module):
         self.proj_1 = nn.Conv2d(d_model, d_model, 1)         # 1x1 conv
         self.activation = nn.GELU()                          # GELU
         if mode == "msta":
-            a = Multi_Spatiotemporal_AttentionLayer(d_model, h_w, kernel_size)
+            a = Multiple_Spatiotemporal_AttentionLayer(d_model, h_w, kernel_size)
         elif mode == "eca":
             a = ExternalAttentionModule(d_model, kernel_size)
         else:
@@ -583,8 +583,8 @@ class ExternalAttentionModule(nn.Module):
         return eca_atten.expand_as(u) * f_x * u
 
 
-class Multi_Spatiotemporal_AttentionLayer(nn.Module):
-    """Multi Spatio_temporal Attention(MSTA)"""
+class Multiple_Spatiotemporal_AttentionLayer(nn.Module):
+    """Multiple Spatio_temporal Attention(MSTA)"""
 
     def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
         super().__init__()

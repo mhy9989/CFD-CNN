@@ -2,8 +2,8 @@ import math
 import torch
 import torch.nn as nn
 
-class Multi_Spatiotemporal_AttentionLayer(nn.Module):
-    """Multi Spatio_temporal Attention(MSTA)"""
+class Multiple_Spatiotemporal_AttentionLayer(nn.Module):
+    """Multiple Spatio_temporal Attention(MSTA)"""
 
     def __init__(self, dim, h_w, kernel_size, dilation=3, gamma=2, b=1):
         super().__init__()
