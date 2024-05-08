@@ -23,9 +23,9 @@
 
 </details>
 
-## Multi Spatio_temporal Attention (MSTA)
+## Multiple Spatio_temporal Attention (MSTA) Network
 
-The code for **Multi Spatio_temporal Attention (MSTA)** Layer can  be found in `MSTA/MSTA.py`
+The code for **Multiple Spatio_temporal Attention (MSTA)** Layer can  be found in `MSTA/MSTA.py`
 
 The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found in `models/simvp_model.py` and `modules/simvp_modules.py`
 
@@ -48,8 +48,8 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 <img src=".\fig\MSTA_flow_chart.jpg" width="50%" />
 </p>
 
-- **Large Kernel Attention (LKA) & Multi-dimensional Channel Attention (MCA)**
+- **Large Kernel Attention (LKA) & Multiple Fusion Attention (MFA)**
 
 <p align="center" width="100%">
-<img src=".\fig\MSTA.jpg" alt="LKA & MCA" width="70%" />
+<img src=".\fig\MSTA.jpg" alt="LKA & MFA" width="70%" />
 </p>
