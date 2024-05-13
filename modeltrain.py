@@ -222,8 +222,7 @@ class modeltrain(object):
             early_stop = recorder(loss_mean.avg, vali_loss, self.method.model, self.model_path, epoch)
             self.best_loss = recorder.val_loss_min
 
-            if self.rank == 0:
-                self.save(name='latest')
+            self.save(name='latest')
 
             if epoch > self.early_stop and early_stop:  # early stop training
                 print_log('Early stop training at f{} epoch'.format(epoch))
