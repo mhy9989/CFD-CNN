@@ -90,7 +90,8 @@ class modeltrain(object):
                 if not self.dist else weights_to_cpu(self.method.model.module.state_dict()),
             'scheduler': self.method.scheduler.state_dict()
             }
-        torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
+        if self.rank == 0:
+            torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
         del checkpoint
     
 
@@ -98,7 +99,8 @@ class modeltrain(object):
         """Saving models data to checkpoints"""
         checkpoint = weights_to_cpu(self.method.model.state_dict()) \
                 if not self.dist else weights_to_cpu(self.method.model.module.state_dict())
-        torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
+        if self.rank == 0:
+            torch.save(checkpoint, osp.join(self.checkpoints_path, f'{name}.pth'))
         del checkpoint
 
 
@@ -318,9 +320,10 @@ class modeltrain(object):
                 results_n = self.de_norm(results)
                 self.muti_inference_unit(s, results_n, metric_list, channel_names, "Original", min_max_delt, mean)
         
-        results_step = np.array(results_step)
-        folder_path = osp.join(self.model_path, 'inference', 'results_step.npy')
-        np.save(folder_path, results_step)
+        if self.rank == 0:
+            results_step = np.array(results_step)
+            folder_path = osp.join(self.model_path, 'inference', 'results_step.npy')
+            np.save(folder_path, results_step)
 
 
     def muti_inference_unit(self, s, results, metric_list, channel_names, mode="Computed", min_max_delt=None, mean=False):
