@@ -63,6 +63,9 @@ class MSTA(SimVP):
                     self.optimizer.step()
                 else:
                     self.model.step()
+                
+                if not self.dist:
+                    self.scheduler.step()
 
                 torch.cuda.synchronize()
                 num_updates += 1
