@@ -101,7 +101,7 @@ class PredRNN(Base_method):
                 else:
                     self.model.step()
                 
-                if not self.dist:
+                if not self.dist and not self.by_epoch:
                     self.scheduler.step()
 
                 torch.cuda.synchronize()
