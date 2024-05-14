@@ -142,6 +142,7 @@ def set_seed(seed, deterministic=True):
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
     if deterministic:
+        torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     else:
