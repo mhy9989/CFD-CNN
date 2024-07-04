@@ -1,4 +1,4 @@
-# A flow field prediction program 
+# A Flow Field Prediction Program (based on [OpenSTL](https://github.com/chengtan9907/OpenSTL))
 
 ## Overview
 
@@ -25,7 +25,7 @@
 
 ## Multiple Spatio_temporal Attention (MSTA) Network
 
-The code for **Multiple Spatio_temporal Attention (MSTA)** Layer can  be found in `MSTA/MSTA.py`
+The code for **Multiple Spatio_temporal Attention (MSTA)** Layer can be found in `MSTA/MSTA.py`
 
 The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found in `models/simvp_model.py` and `modules/simvp_modules.py`
 
