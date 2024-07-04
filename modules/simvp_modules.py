@@ -5,7 +5,7 @@ import torch.nn as nn
 from timm.layers  import DropPath, trunc_normal_
 from timm.models.convnext import ConvNeXtBlock
 from timm.models.mlp_mixer import MixerBlock
-from timm.models.swin_transformer import SwinTransformerBlock, window_partition, window_reverse
+from timm.models.swin_transformer import SwinTransformerBlock
 from timm.models.vision_transformer import Block as ViTBlock
 
 from .layers import (HorBlock, ChannelAggregationFFN, MultiOrderGatedAggregation,
@@ -518,35 +518,6 @@ class ViTSubBlock(ViTBlock):
         return x.reshape(B, H, W, C).permute(0, 3, 1, 2)
 
 
-class ViM2SubBlock(VMamba2):
-    """A block of Vision Transformer."""
-
-    def __init__(self, dim, mlp_ratio=4., drop=0., drop_path=0.1):
-        super().__init__(dim=dim, num_heads=8, mlp_ratio=mlp_ratio, qkv_bias=True,
-                         proj_drop=drop, drop_path=drop_path, act_layer=nn.GELU, norm_layer=nn.LayerNorm)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm2d)):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-
-    @torch.jit.ignore
-    def no_weight_decay(self):
-        return {}
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        x = x.flatten(2).transpose(1, 2)
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x.reshape(B, H, W, C).permute(0, 3, 1, 2)
-    
 
 class TemporalAttention(nn.Module):
     """A Temporal Attention block for Temporal Attention Unit"""
