@@ -131,7 +131,7 @@ class modelbuild():
         
         args = self.initialize(args)
         args.batch_size = args.per_device_train_batch_size * args.world_size
-        trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after + 1 - args.text_num))
+        trainlen = int((1 - args.valid_ratio) * int(args.data_num - args.data_previous - args.data_after + 1 - args.test_num))
         args.steps_per_epoch = math.ceil(trainlen/args.world_size/args.per_device_train_batch_size)
         ds_steps_per_print = args.max_epoch * args.steps_per_epoch + 1 # close ds step per print
 

@@ -47,12 +47,12 @@ def get_datloader(args, mode = "train", infer_num = [-1], infer_step = 1):
     # Split dataset into training dataset, validation dataset and test_dataset
     indices = list(range(len(dataset)))
 
-    if args.text_num > len(dataset) -1:
-        print_log(f"Too many text_num choose!")
+    if args.test_num > len(dataset) -1:
+        print_log(f"Too many test_num choose!")
         raise EOFError
 
-    indices_train_valid = indices[:-args.text_num]
-    indices_test = indices[-args.text_num:]
+    indices_train_valid = indices[:-args.test_num]
+    indices_test = indices[-args.test_num:]
 
     train_valid_dataset = Subset(dataset, indices_train_valid)
     test_dataset = Subset(dataset, indices_test)

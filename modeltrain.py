@@ -269,7 +269,7 @@ class modeltrain(object):
     def test_unit(self, results, metric_list, channel_names, mode="Computed",min_max_delt=None):
         eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
                                     metrics=metric_list, channel_names=channel_names, mode = mode)
-        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse']])
         print_log(f"Total:")
         print_log(f"{eval_log_av}\n")
         if self.rank == 0:
@@ -328,7 +328,7 @@ class modeltrain(object):
     def muti_inference_unit(self, s, results, metric_list, channel_names, mode="Computed", min_max_delt=None, mean=False):
         eval_res_av, eval_log_av = metric(results['preds'], results['labels'],
                                     metrics=metric_list, channel_names=channel_names, mode = mode)
-        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse'], eval_res_av['mre']])
+        results['metrics'] = np.array([eval_res_av['mae'], eval_res_av['mse']])
         print_log(f"Total:")
         print_log(f"Step: {s}\n{eval_log_av}\n")
         if self.rank == 0:

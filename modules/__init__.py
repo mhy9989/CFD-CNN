@@ -1,7 +1,6 @@
 from .convlstm_modules import ConvLSTMCell
 from .crevnet_modules import zig_revpredictor, autoencoder
 from .e3dlstm_modules import Eidetic3DLSTMCell, tf_Conv3d
-from .mim_modules import MIMBlock, MIMN
 from .mau_modules import MAUCell
 from .phydnet_modules import PhyCell, PhyD_ConvLSTM, PhyD_EncoderRNN, K2M
 from .prednet_modules import PredNetConvLSTMCell
