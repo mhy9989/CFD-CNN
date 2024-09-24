@@ -49,7 +49,7 @@
     "data_previous": 10,
     "data_after": 1,
     "valid_ratio": 0,
-    "text_num": 50
+    "test_num": 50
   },
   "optim_config": {
     "optim": "Adamw",
