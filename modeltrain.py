@@ -138,7 +138,7 @@ class modeltrain(object):
     def display_method_info(self):
         """Plot the basic infomation of supported methods"""
         T, C, H, W = self.args.in_shape
-        if self.args.method in ['simvp', 'tau', 'sau']:
+        if self.args.method in ['simvp', 'tau', 'msta']:
             input_dummy = torch.ones(1, self.args.data_previous, C, H, W).to(self.device)
         elif self.args.method == 'crevnet':
             # crevnet must use the batchsize rather than 1
