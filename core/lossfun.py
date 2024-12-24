@@ -105,12 +105,6 @@ def diff_div_reg(pred_y, batch_y, tau=0.1, eps=1e-12):
 
 class Regularization(torch.nn.Module):
     def __init__(self,model,weight_decay,p=2,dist=False):
-        '''
-        :param model 模型
-        :param weight_decay:正则化参数
-        :param p: 范数计算中的幂指数值，默认求2范数,
-                  当p=2为L2正则化,p=1为L1正则化
-        '''
         super(Regularization, self).__init__()
         if weight_decay <= 0:
             raise ValueError("param weight_decay can not <=0")
@@ -121,18 +115,13 @@ class Regularization(torch.nn.Module):
         self.weight_list=self.get_weight(self.model)
  
     def to(self,device):
-        '''
-        指定运行模式
-        :param device: cude or cpu
-        :return:
-        '''
         self.device=device
         super().to(device)
         return self
  
     def forward(self, model):
         self.check_dist(model)
-        self.weight_list=self.get_weight(self.model)#获得最新的权重
+        self.weight_list=self.get_weight(self.model)
         reg_loss = self.regularization_loss(self.weight_list, self.weight_decay, self.p)
         return reg_loss
  
@@ -143,11 +132,6 @@ class Regularization(torch.nn.Module):
             self.model=model
 
     def get_weight(self,model):
-        '''
-        获得模型的权重列表
-        :param model:
-        :return:
-        '''
         weight_list = []
         for name, param in model.named_parameters():
             if 'weight' in name:
@@ -156,13 +140,6 @@ class Regularization(torch.nn.Module):
         return weight_list
  
     def regularization_loss(self,weight_list, weight_decay, p=2):
-        '''
-        计算张量范数
-        :param weight_list:
-        :param p: 范数计算中的幂指数值，默认求2范数
-        :param weight_decay:
-        :return:
-        '''
         reg_loss=0
         for name, w in weight_list:
             l2_reg = torch.norm(w, p=p)
@@ -170,7 +147,6 @@ class Regularization(torch.nn.Module):
  
         reg_loss=weight_decay*reg_loss
         return reg_loss
-
 
 
 def GS(pred_y, batch_y, jac, mode = "CD2"):
