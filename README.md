@@ -1,4 +1,4 @@
-# A Flow Field Prediction Program (based on [OpenSTL](https://github.com/chengtan9907/OpenSTL))
+# A Flow Field Prediction Program (based on [OpenSTL](https://github.com/chengtan9907/OpenSTL) & [DeepSpeed](https://github.com/deepspeedai/DeepSpeed))
 
 ## Overview
 
