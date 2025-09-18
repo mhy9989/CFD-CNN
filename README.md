@@ -1,10 +1,7 @@
-# A Flow Field Prediction Program (based on [OpenSTL](https://github.com/chengtan9907/OpenSTL) & [DeepSpeed](https://github.com/deepspeedai/DeepSpeed))
-
-## Overview
+# Multiple Spatio-temporal Attention (MSTA) Network
 
 <details open>
 <summary>Code Structures</summary>
-
 
 - `core/` core training plugins and metrics.
 - `methods/` contains training methods for various prediction methods.
@@ -23,11 +20,10 @@
 
 </details>
 
-## Multiple Spatio_temporal Attention (MSTA) Network
-
-The code for **Multiple Spatio_temporal Attention (MSTA)** Layer can be found in `MSTA/MSTA.py`
+The code for **Multiple Spatio-temporal Attention (MSTA)** Layer can be found in `MSTA/MSTA.py`
 
 The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found in `models/simvp_model.py` and `modules/simvp_modules.py`
+
 
 - **Overview architecture**
 
@@ -53,3 +49,21 @@ The detailed **MSTA** code (Spatial Encoder/Decoder & MSTA module) can be found 
 <p align="center" width="100%">
 <img src=".\fig\MSTA.jpg" alt="LKA & MFA" width="70%" />
 </p>
+
+## 📖 Citation
+
+If you find this project helpful, please consider citing our paper:
+
+```bibtex
+@article{MEN2025109685,
+  title   = {Multiple spatio-temporal attention network: A deep convolutional network for spatio-temporal evolution prediction of flow fields},
+  journal = {Computer Physics Communications},
+  volume  = {315},
+  pages   = {109685},
+  year    = {2025},
+  issn    = {0010-4655},
+  doi     = {https://doi.org/10.1016/j.cpc.2025.109685},
+  url     = {https://www.sciencedirect.com/science/article/pii/S0010465525001870},
+  author  = {Hongyuan Men and Ji Zhang and Yixuan Mao and Xinliang Li and Guoan Zhao and Hongwei Liu},
+  keywords= {Turbulence, Flow field prediction, Convolutional network, Channel attention, Gradient sharpening}
+}
